@@ -20,3 +20,15 @@ def create_connection():
     except OperationalError as e:
         print(f"Произошла ошибка '{e}'")
     return connection
+
+
+def insert_client_data(phone_number, name="None", surname="None"):
+
+    insert_query = f"INSERT INTO main.client (phone, name, surname) VALUES ({phone_number},'{name}','{surname}')"
+
+    connection = create_connection()
+    connection.autocommit = True
+    cursor = connection.cursor()
+    cursor.execute(insert_query)
+
+
