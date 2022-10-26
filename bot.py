@@ -1,6 +1,11 @@
 import configparser
 import telebot
 
+
+def client(phone_number):
+    print(phone_number)
+
+
 config = configparser.ConfigParser()
 config.read("config.ini")
 token = config["main"]["TOKEN"]
@@ -8,16 +13,13 @@ token = config["main"]["TOKEN"]
 bot = telebot.TeleBot(token)
 
 
-@bot.message_handler(content_types=['text'])
+@bot.message_handler(content_types=['text', 'contact'])
 def get_text_messages(message):
-    if message.text == "Привет":
-        bot.send_message(message.from_user.id, "Привет, чем я могу тебе помочь?")
-    elif message.text == "/help":
-        bot.send_message(message.from_user.id, "Напиши привет")
-    else:
-        bot.send_message(message.from_user.id, "Я тебя не понимаю. Напиши /help.")
+    if message.content_type == 'contact':
+        client(message.contact.phone_number)
+    elif message.content_type == 'text':
+        if message.text == "/command":
+            bot.send_message(message.from_user.id, "Обработчик команды")
 
 
-#bot.polling(none_stop=True, interval=0)
-
-
+bot.infinity_polling()
