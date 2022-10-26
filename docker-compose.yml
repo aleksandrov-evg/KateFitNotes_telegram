@@ -8,10 +8,14 @@ services:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: root
       POSTGRESS_DB: my_db
+      PGDATA: /data/postgres
     volumes:
-      - ./db_pG:/db_local
+      - ./pg_db:/data/postgres
     ports:
       - "5432:5432"
+    networks:
+      - postgres
+    restart: unless-stopped
 
   pgadmin:
     container_name: pgadmin
@@ -21,3 +25,12 @@ services:
       PGADMIN_DEFAULT_PASSWORD: root
     ports:
       - "5050:80"
+    networks:
+      - postgres
+    volumes:
+      - ./pgadmin:/var/lib/pgadmin
+    restart: unless-stopped
+
+networks:
+  postgres:
+    driver: bridge
