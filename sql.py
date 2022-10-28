@@ -1,6 +1,7 @@
 import configparser
 import psycopg2
 from psycopg2 import OperationalError
+import datetime
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -49,6 +50,6 @@ def search_client(phone_number):
 
 def insert_client_data(phone_number, name="None", surname="None"):
     search_client(phone_number)
-    text_query = f"INSERT INTO main.client (phone, name, surname) " \
-                 f"VALUES ({phone_number},'{name}','{surname}')"
+    text_query = f"INSERT INTO main.client (phone, name, surname, add_time) " \
+                 f"VALUES ({phone_number},'{name}','{surname}', '{datetime.date.today()}')"
     execute_query(text_query)

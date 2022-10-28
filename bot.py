@@ -30,7 +30,7 @@ def start(message):
     btn1 = types.KeyboardButton("➕ Новый клиент")
     btn2 = types.KeyboardButton("📓 Расписание тренировок")
     btn3 = types.KeyboardButton("💰 Учет тренировок")
-    test = (btn1, btn3)
+    markup.add(btn1, btn3)
     markup.add(btn2)
     bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
                      reply_markup=markup)
