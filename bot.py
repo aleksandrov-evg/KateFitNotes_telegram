@@ -10,6 +10,19 @@ config.read("config.ini")
 token = config["main"]["TOKEN"]
 bot = telebot.TeleBot(token)
 allow_add_client = 0
+current_data = {}
+
+
+def current_data_clear():
+    global current_data
+    current_data = {
+        'client': None,
+        'type_train': None,
+        'data': None,
+        'time': None,
+        'price': None,
+        'studio': None
+        }
 
 
 def validate_phone(phone_number):
@@ -22,33 +35,17 @@ def validate_phone(phone_number):
         return 0
 
 
-
-@bot.message_handler(commands=['start'])
-def start(message):
-
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn1 = types.KeyboardButton("➕ Новый клиент")
-    btn2 = types.KeyboardButton("📓 Расписание тренировок")
-    btn3 = types.KeyboardButton("💰 Учет тренировок")
-    markup.add(btn1, btn3)
-    markup.add(btn2)
-    bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
-                     reply_markup=markup)
-
-@bot.message_handler(commands=['date'])
-def input_date(message):
-    markup = types.InlineKeyboardMarkup(row_width=5)
-    current_year = datetime.now().year
-    month = datetime.now().month
-    days = calendar.monthrange(current_year, month)[1]
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    for i in range(days):
-
-        button1 = types.InlineKeyboardButton("Вывести расписание", callback_data='show_schedule')
-        button2 = types.InlineKeyboardButton("Добавить тренировку", callback_data='add_train')
-        markup.add(button1, button2)
-        bot.send_message(message.chat.id, "Поработаем с расписанием?", reply_markup=markup)
-
+@bot.message_handler(commands=['show_all_type_train'])
+def show_all_type_train(message):
+    list_train = sql.list_all_train()
+    markup = types.InlineKeyboardMarkup(row_width=3)
+    if int(list_train[1]) > 0:
+        list_button = [types.InlineKeyboardButton(f'{i["type_train"]}', callback_data=f'{i["type_train"]}')
+                       for i in list_train[2]]
+        markup.add(*list_button)
+        bot.send_message(message.chat.id, "тест генератора", reply_markup=markup)
+    else:
+        bot.send_message(message.chat.id, 'Список тренировок пуст!')
 
 
 @bot.message_handler(content_types=['text', 'contact'])

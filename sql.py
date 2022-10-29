@@ -53,3 +53,11 @@ def insert_client_data(phone_number, name="None", surname="None"):
     text_query = f"INSERT INTO main.client (phone, name, surname, add_time) " \
                  f"VALUES ({phone_number},'{name}','{surname}', '{datetime.date.today()}')"
     execute_query(text_query)
+
+
+def list_all_train():
+    text_query = f"SELECT type_train FROM main.trains"
+    return execute_query(text_query)
+
+
+
