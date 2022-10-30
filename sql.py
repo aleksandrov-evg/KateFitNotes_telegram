@@ -60,4 +60,12 @@ def list_all_train():
     return execute_query(text_query)
 
 
+def select_last_client(number_client=0):
+    if number_client == 0:
 
+    else:
+        pass
+
+
+def insert_schedule(dict_with_data):
+    pass

@@ -14,25 +14,40 @@ current_data = {}
 
 
 def current_data_clear():
-    global current_data
-    current_data = {
-        'client': None,
-        'type_train': None,
-        'data': None,
-        'time': None,
-        'price': None,
-        'studio': None
-        }
+    # global current_data
+    # current_data = {
+    #     'client': None,
+    #     'type_train': None,
+    #     'data': None,
+    #     'time': None,
+    #     'price': None,
+    #     'studio': None
+    # }
+    pass
 
 
-def validate_phone(phone_number):
+def validate_phone(message):
+    phone_number = message.contact.phone_number
     if len(phone_number) == 12 and phone_number[0:2] == '+7':
         return int(phone_number[2:])
-    elif len(phone_number) == 11 and phone_number[0:1] == '8':
-        return int(phone_number[1:])
+    elif len(phone_number) == 11:
+        if phone_number[0:1] == '7' or phone_number[0:1] == '8':
+            return int(phone_number[1:])
     else:
         bot.send_message(message.from_user.id, "Операция не выполнена! Не верный формат номера")
         return 0
+
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn1 = types.KeyboardButton("➕ Новый клиент")
+    btn2 = types.KeyboardButton("📓 Расписание тренировок")
+    btn3 = types.KeyboardButton("💰 Учет тренировок")
+    markup.add(btn1, btn3)
+    markup.add(btn2)
+    bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
+                     reply_markup=markup)
 
 
 @bot.message_handler(commands=['show_all_type_train'])
@@ -48,12 +63,19 @@ def show_all_type_train(message):
         bot.send_message(message.chat.id, 'Список тренировок пуст!')
 
 
+@bot.message_handler(commands=['select_client'])
+def select_client_for_operate(message):
+    # сделать выбор клинета с которым будет выполняться операция (напр добавление)
+
+    pass
+
+
 @bot.message_handler(content_types=['text', 'contact'])
 def get_text_messages(message):
     global allow_add_client
     if message.content_type == 'contact':
         if allow_add_client == 1:
-            phone_number = validate_phone(message.contact.phone_number)
+            phone_number = validate_phone(message)
             search_client = sql.search_client(phone_number)
             if not phone_number:
                 bot.send_message(message.from_user.id, "Такой клиент уже существует в базе")
