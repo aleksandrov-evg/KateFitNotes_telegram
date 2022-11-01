@@ -36,6 +36,11 @@ def validate_phone(message):
         return 0
 
 
+def generate_button(list_obj, name_operation, data_for_callback=None):
+    current_data['operation'] = f'{name_operation}'
+    pass
+
+
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -77,13 +82,6 @@ def show_list_client(message):
         bot.send_message(message.chat.id, 'Список клиентов пуст!')
 
 
-@bot.message_handler(commands=['select_client'])
-def select_client_for_operate(message):
-    # сделать выбор клинета с которым будет выполняться операция (напр добавление)
-
-    pass
-
-
 @bot.message_handler(content_types=['text', 'contact'])
 def get_text_messages(message):
     global allow_add_client
@@ -122,17 +120,17 @@ def callback_inline(call):
     try:
         if call.message:
             if current_data['operation'] == 'choose_client':
-                pass
+                current_data['client'] = call.data
+                print(current_data['client'])
             elif current_data['operation'] == 'choose_train':
                 pass
             elif current_data['operation'] == 'choose_time':
                 pass
 
-
-            # if call.data == 'add_train':
-            #     bot.send_message(call.message.chat.id, "Нажали вывести расписание")
-            #     bot.send_chat_action()
-            # elif call.data == 'show_schedule':
+                # if call.data == 'add_train':
+                #     bot.send_message(call.message.chat.id, "Нажали вывести расписание")
+                #     bot.send_chat_action()
+                # elif call.data == 'show_schedule':
                 pass
     except Exception as e:
         print(repr(e))

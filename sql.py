@@ -35,9 +35,9 @@ def create_connection():
             host=config["sql"]["host"],
             port=config["sql"]["port"],
         )
-        print("Подключение к базе данных PostgreSQL прошло успешно")
+        print(f"[{datetime.datetime.now()}]Подключение к базе данных PostgreSQL прошло успешно")
     except OperationalError as e:
-        print(f"Произошла ошибка '{e}'")
+        print(f"[{datetime.datetime.now()}]Произошла ошибка '{e}'")
     return connection
 
 
