@@ -63,6 +63,19 @@ def show_all_type_train(message):
         bot.send_message(message.chat.id, 'Список тренировок пуст!')
 
 
+@bot.message_handler(commands=['show_list_client'])
+def show_all_type_train(message):
+    list_client = sql.select_last_client()
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    if int(list_client[1]) > 0:
+        list_button = [types.InlineKeyboardButton(f'{i["name"]}', callback_data=f'{i["name"]}')
+                       for i in list_client[2]]
+        markup.add(*list_button)
+        bot.send_message(message.chat.id, "Все клиенты:", reply_markup=markup)
+    else:
+        bot.send_message(message.chat.id, 'Список клиентов пуст!')
+
+
 @bot.message_handler(commands=['select_client'])
 def select_client_for_operate(message):
     # сделать выбор клинета с которым будет выполняться операция (напр добавление)

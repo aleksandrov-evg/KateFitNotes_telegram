@@ -61,11 +61,13 @@ def list_all_train():
 
 
 def select_last_client(number_client=0):
-    if number_client == 0:
-
-    else:
-        pass
-
+    text_query = f"SELECT main.schedule.client, MAX (main.schedule.date), main.client.name, main.client.surname " \
+                 f"FROM main.schedule LEFT JOIN main.client ON main.schedule.client = main.client.phone " \
+                 f"GROUP BY client, main.client.name,  main.client.surname " \
+                 f"ORDER BY MAX (date) DESC"
+    if number_client != 0:
+        text_query += f" LIMIT {number_client}"
+    return execute_query(text_query)
 
 def insert_schedule(dict_with_data):
     pass
