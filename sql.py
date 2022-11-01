@@ -7,7 +7,7 @@ config = configparser.ConfigParser()
 config.read("config.ini")
 
 
-def execute_query(text_query: object) -> object:
+def execute_query(text_query):
     connection = create_connection()
     connection.autocommit = True
     cursor = connection.cursor()

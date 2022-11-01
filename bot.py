@@ -2,8 +2,6 @@ import configparser
 import telebot
 from telebot import types
 import sql
-import datetime
-import calendar
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -11,19 +9,19 @@ token = config["main"]["TOKEN"]
 bot = telebot.TeleBot(token)
 allow_add_client = 0
 current_data = {}
+current_operation = None
 
 
 def current_data_clear():
-    # global current_data
-    # current_data = {
-    #     'client': None,
-    #     'type_train': None,
-    #     'data': None,
-    #     'time': None,
-    #     'price': None,
-    #     'studio': None
-    # }
-    pass
+    global current_data
+    current_data = {
+        'operation': None,
+        'client': None,
+        'type_train': None,
+        'data': None,
+        'time': None,
+        'price': None
+    }
 
 
 def validate_phone(message):
@@ -48,25 +46,28 @@ def start(message):
     markup.add(btn2)
     bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
                      reply_markup=markup)
+    current_data_clear()
 
 
 @bot.message_handler(commands=['show_all_type_train'])
 def show_all_type_train(message):
     list_train = sql.list_all_train()
     markup = types.InlineKeyboardMarkup(row_width=3)
+    current_data['operation'] = 'choose_train'
     if int(list_train[1]) > 0:
         list_button = [types.InlineKeyboardButton(f'{i["type_train"]}', callback_data=f'{i["type_train"]}')
                        for i in list_train[2]]
         markup.add(*list_button)
-        bot.send_message(message.chat.id, "тест генератора", reply_markup=markup)
+        bot.send_message(message.chat.id, "Доступные тренировки:", reply_markup=markup)
     else:
         bot.send_message(message.chat.id, 'Список тренировок пуст!')
 
 
 @bot.message_handler(commands=['show_list_client'])
-def show_all_type_train(message):
+def show_list_client(message):
     list_client = sql.select_last_client()
     markup = types.InlineKeyboardMarkup(row_width=2)
+    current_data['operation'] = 'choose_client'
     if int(list_client[1]) > 0:
         list_button = [types.InlineKeyboardButton(f'{i["name"]}', callback_data=f'{i["name"]}')
                        for i in list_client[2]]
@@ -120,10 +121,18 @@ def get_text_messages(message):
 def callback_inline(call):
     try:
         if call.message:
-            if call.data == 'add_train':
-                bot.send_message(call.message.chat.id, "Нажали вывести расписание")
-                bot.send_chat_action()
-            elif call.data == 'show_schedule':
+            if current_data['operation'] == 'choose_client':
+                pass
+            elif current_data['operation'] == 'choose_train':
+                pass
+            elif current_data['operation'] == 'choose_time':
+                pass
+
+
+            # if call.data == 'add_train':
+            #     bot.send_message(call.message.chat.id, "Нажали вывести расписание")
+            #     bot.send_chat_action()
+            # elif call.data == 'show_schedule':
                 pass
     except Exception as e:
         print(repr(e))
