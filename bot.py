@@ -12,8 +12,10 @@ allow_add_client = 0
 current_data = {}
 current_operation = None
 dict_date = {}
+work_hour = {'start': 7, 'end': 23}
 
 
+# инициализация структур и сброс к дефолту
 def current_data_clear():
     global current_data, dict_date
     current_data = {
@@ -22,7 +24,8 @@ def current_data_clear():
         'type_train': None,
         'date': None,
         'time': None,
-        'price': None
+        'price': None,
+        'list_time': None
     }
 
     dict_date = {
@@ -46,12 +49,6 @@ def validate_phone(message):
     else:
         bot.send_message(message.from_user.id, "Операция не выполнена! Не верный формат номера")
         return 0
-
-
-def create_date_list(date):
-    # date += datetime.timedelta(days=7)
-
-    return date_list
 
 
 @bot.message_handler(commands=['start'])
@@ -114,21 +111,22 @@ def show_date(message, date=datetime.date.today()):
     list_button = [types.InlineKeyboardButton(f'{date_list[i]:%d %a}',
                                               callback_data=f'{i}') for i in range(7)]
 
-    # weekday_list = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-    # list_button = [types.InlineKeyboardButton(f'{date_list[i]} {weekday_list[i]}',
-    #                                           callback_data=f'day_{i}') for i in range(7)]
-
     markup.add(*list_button)
     bot.send_message(message.chat.id, "Выбор даты для расписания:", reply_markup=markup)
-    # markup = types.InlineKeyboardMarkup(row_width=2)
-    # current_data['operation'] = 'choose_client'
-    # if int(list_client[1]) > 0:
-    #     list_button = [types.InlineKeyboardButton(f'{i["name"]}', callback_data=f'{i["name"]}')
-    #                    for i in list_client[2]]
-    #     markup.add(*list_button)
-    #     bot.send_message(message.chat.id, "Все клиенты:", reply_markup=markup)
-    # else:
-    #     bot.send_message(message.chat.id, 'Список клиентов пуст!')
+
+
+@bot.message_handler(commands=['show_time'])
+def show_available_time(message):
+    current_data['operation'] = 'choose_time'
+    time_list = [datetime.time(i, 0) for i in range(work_hour['start'], work_hour['end'])]
+    list_not_available = sql.select_time_at_data(current_data['date'])
+    result = sorted(list(set(time_list) ^ set(list_not_available)))
+    current_data['list_time'] = result
+    list_button = [types.InlineKeyboardButton(f'{result[i]:%H:%M}',
+                                              callback_data=f'{i}') for i in range(len(result))]
+    markup = types.InlineKeyboardMarkup(row_width=3)
+    markup.add(*list_button)
+    bot.send_message(message.chat.id, f'Выбор времени на дату: {current_data["operation"]}', reply_markup=markup)
 
 
 @bot.message_handler(content_types=['text', 'contact'])
@@ -164,14 +162,25 @@ def get_text_messages(message):
             start(message)
 
 
+@bot.message_handler(commands=['show_time'])
+def confirm_add(message):
+    markup = types.InlineKeyboardMarkup()
+    confirm = types.InlineKeyboardButton("🆗 Добавить", callback_data='approve_add')
+    cancel = types.InlineKeyboardButton("❌ Отменить", callback_data='cancel_add')
+    markup.add(confirm, cancel)
+    bot.send_message(message.chat.id, f"Добавить тренировку {current_data['type_train']} "
+                                      f"для клиента {current_data['client']} на {current_data['date']} "
+                                      f"в {current_data['time']}?", reply_markup=markup)
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
     try:
         if call.message:
             if current_data['operation'] == 'choose_client':
                 current_data['client'] = call.data
+                show_all_type_train(call.message)
             elif current_data['operation'] == 'choose_train':
                 current_data['type_train'] = call.data
+                show_date(call.message)
             elif current_data['operation'] == 'choose_date':
                 if call.data == 'prev_week':
                     bot.delete_message(call.message.chat.id, call.message.id)
@@ -184,7 +193,10 @@ def callback_inline(call):
                     show_date(call.message, dict_date['0'] + datetime.timedelta(days=7))
                 elif len(call.data) == 1:
                     current_data['date'] = dict_date[call.data]
-                    print(current_data['date'])
+                    show_available_time(call.message)
+            elif current_data['operation'] == 'choose_time':
+                current_data['time'] = current_data['list_time'][int(call.data)]
+                confirm_add(call.message)
                 # else:
                 #     pass
 

@@ -69,5 +69,8 @@ def select_last_client(number_client=0):
         text_query += f" LIMIT {number_client}"
     return execute_query(text_query)
 
-def insert_schedule(dict_with_data):
-    pass
+
+def select_time_at_data(date):
+    text_query = f"SELECT time FROM main.schedule WHERE date = '{date}'"
+
+    return [i['time'] for i in execute_query(text_query)[2]]
