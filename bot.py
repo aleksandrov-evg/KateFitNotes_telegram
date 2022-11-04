@@ -2,6 +2,7 @@ import configparser
 import telebot
 from telebot import types
 import sql
+import datetime
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -10,17 +11,28 @@ bot = telebot.TeleBot(token)
 allow_add_client = 0
 current_data = {}
 current_operation = None
+dict_date = {}
 
 
 def current_data_clear():
-    global current_data
+    global current_data, dict_date
     current_data = {
         'operation': None,
         'client': None,
         'type_train': None,
-        'data': None,
+        'date': None,
         'time': None,
         'price': None
+    }
+
+    dict_date = {
+        '1': None,
+        '2': None,
+        '3': None,
+        '4': None,
+        '5': None,
+        '6': None,
+        '7': None
     }
 
 
@@ -36,9 +48,10 @@ def validate_phone(message):
         return 0
 
 
-def generate_button(list_obj, name_operation, data_for_callback=None):
-    current_data['operation'] = f'{name_operation}'
-    pass
+def create_date_list(date):
+    # date += datetime.timedelta(days=7)
+
+    return date_list
 
 
 @bot.message_handler(commands=['start'])
@@ -82,6 +95,42 @@ def show_list_client(message):
         bot.send_message(message.chat.id, 'Список клиентов пуст!')
 
 
+@bot.message_handler(commands=['show_date'])
+def show_date(message, date=datetime.date.today()):
+    global dict_date, current_data
+    current_data['operation'] = 'choose_date'
+
+    markup = types.InlineKeyboardMarkup(row_width=7)
+    button_prev_week = types.InlineKeyboardButton(f'<< неделя', callback_data=f'prev_week')
+    button_current_week = types.InlineKeyboardButton(f'Эта неделя', callback_data=f'current_week')
+    button_next_week = types.InlineKeyboardButton(f'неделя >>', callback_data=f'next_week')
+    markup.add(button_prev_week, button_current_week, button_next_week)
+
+    weekday = date.isoweekday()
+    first_day_cur_week = date - datetime.timedelta(days=weekday - 1)
+    date_list = [first_day_cur_week + datetime.timedelta(days=d) for d in range(7)]
+    for i in range(7):
+        dict_date[f'{i}'] = date_list[i]
+    list_button = [types.InlineKeyboardButton(f'{date_list[i]:%d %a}',
+                                              callback_data=f'{i}') for i in range(7)]
+
+    # weekday_list = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    # list_button = [types.InlineKeyboardButton(f'{date_list[i]} {weekday_list[i]}',
+    #                                           callback_data=f'day_{i}') for i in range(7)]
+
+    markup.add(*list_button)
+    bot.send_message(message.chat.id, "Выбор даты для расписания:", reply_markup=markup)
+    # markup = types.InlineKeyboardMarkup(row_width=2)
+    # current_data['operation'] = 'choose_client'
+    # if int(list_client[1]) > 0:
+    #     list_button = [types.InlineKeyboardButton(f'{i["name"]}', callback_data=f'{i["name"]}')
+    #                    for i in list_client[2]]
+    #     markup.add(*list_button)
+    #     bot.send_message(message.chat.id, "Все клиенты:", reply_markup=markup)
+    # else:
+    #     bot.send_message(message.chat.id, 'Список клиентов пуст!')
+
+
 @bot.message_handler(content_types=['text', 'contact'])
 def get_text_messages(message):
     global allow_add_client
@@ -121,17 +170,28 @@ def callback_inline(call):
         if call.message:
             if current_data['operation'] == 'choose_client':
                 current_data['client'] = call.data
-                print(current_data['client'])
             elif current_data['operation'] == 'choose_train':
-                pass
-            elif current_data['operation'] == 'choose_time':
-                pass
+                current_data['type_train'] = call.data
+            elif current_data['operation'] == 'choose_date':
+                if call.data == 'prev_week':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_date(call.message, dict_date['0'] - datetime.timedelta(days=7))
+                elif call.data == 'current_week':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_date(call.message)
+                elif call.data == 'next_week':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_date(call.message, dict_date['0'] + datetime.timedelta(days=7))
+                elif len(call.data) == 1:
+                    current_data['date'] = dict_date[call.data]
+                    print(current_data['date'])
+                # else:
+                #     pass
 
                 # if call.data == 'add_train':
                 #     bot.send_message(call.message.chat.id, "Нажали вывести расписание")
                 #     bot.send_chat_action()
                 # elif call.data == 'show_schedule':
-                pass
     except Exception as e:
         print(repr(e))
 
