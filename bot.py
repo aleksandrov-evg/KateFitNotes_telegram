@@ -25,6 +25,7 @@ def current_data_clear():
         'date': None,
         'time': None,
         'price': None,
+        'list_client': None,
         'list_time': None
     }
 
@@ -84,8 +85,9 @@ def show_list_client(message):
     markup = types.InlineKeyboardMarkup(row_width=2)
     current_data['operation'] = 'choose_client'
     if int(list_client[1]) > 0:
-        list_button = [types.InlineKeyboardButton(f'{i["name"]}', callback_data=f'{i["name"]}')
-                       for i in list_client[2]]
+        current_data['list_client'] = list_client[2]
+        list_button = [types.InlineKeyboardButton(f'{list_client[2][i]["name"]}', callback_data=f'{i}')
+                       for i in range(len(list_client[2]))]
         markup.add(*list_button)
         bot.send_message(message.chat.id, "Все клиенты:", reply_markup=markup)
     else:
@@ -168,15 +170,19 @@ def confirm_add(message):
     confirm = types.InlineKeyboardButton("🆗 Добавить", callback_data='approve_add')
     cancel = types.InlineKeyboardButton("❌ Отменить", callback_data='cancel_add')
     markup.add(confirm, cancel)
-    bot.send_message(message.chat.id, f"Добавить тренировку {current_data['type_train']} "
-                                      f"для клиента {current_data['client']} на {current_data['date']} "
-                                      f"в {current_data['time']}?", reply_markup=markup)
+    bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['type_train']}*\n"
+                                      f"Клиент *{current_data['client']['name']}* *{current_data['client']['surname']}*\n"
+                                      f"На дату: *{current_data['date']}*\n"
+                                      f"На время: *{current_data['time']}*?",
+                     parse_mode='Markdown', reply_markup=markup)
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
     try:
         if call.message:
             if current_data['operation'] == 'choose_client':
-                current_data['client'] = call.data
+                current_data['client'] = current_data['list_client'][int(call.data)]
                 show_all_type_train(call.message)
             elif current_data['operation'] == 'choose_train':
                 current_data['type_train'] = call.data
@@ -197,13 +203,7 @@ def callback_inline(call):
             elif current_data['operation'] == 'choose_time':
                 current_data['time'] = current_data['list_time'][int(call.data)]
                 confirm_add(call.message)
-                # else:
-                #     pass
 
-                # if call.data == 'add_train':
-                #     bot.send_message(call.message.chat.id, "Нажали вывести расписание")
-                #     bot.send_chat_action()
-                # elif call.data == 'show_schedule':
     except Exception as e:
         print(repr(e))
 
