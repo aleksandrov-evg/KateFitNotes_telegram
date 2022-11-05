@@ -21,10 +21,11 @@ def current_data_clear():
     current_data = {
         'operation': None,
         'client': None,
-        'type_train': None,
+        'train': None,
         'date': None,
         'time': None,
         'price': None,
+        'list_train': None,
         'list_client': None,
         'list_time': None
     }
@@ -58,8 +59,9 @@ def start(message):
     btn1 = types.KeyboardButton("➕ Новый клиент")
     btn2 = types.KeyboardButton("📓 Расписание тренировок")
     btn3 = types.KeyboardButton("💰 Учет тренировок")
-    markup.add(btn1, btn3)
-    markup.add(btn2)
+    btn4 = types.KeyboardButton("➕📅 Добавить тренировку")
+    markup.add(btn1, btn4)
+    markup.add(btn2, btn3)
     bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
                      reply_markup=markup)
     current_data_clear()
@@ -67,12 +69,13 @@ def start(message):
 
 @bot.message_handler(commands=['show_all_type_train'])
 def show_all_type_train(message):
-    list_train = sql.list_all_train()
+    current_data['list_train'] = sql.list_all_train()[2]
     markup = types.InlineKeyboardMarkup(row_width=3)
     current_data['operation'] = 'choose_train'
-    if int(list_train[1]) > 0:
-        list_button = [types.InlineKeyboardButton(f'{i["type_train"]}', callback_data=f'{i["type_train"]}')
-                       for i in list_train[2]]
+    if len(current_data['list_train']) > 0:
+
+        list_button = [types.InlineKeyboardButton(f"{current_data['list_train'][i]['type_train']}", callback_data=f'{i}')
+                       for i in range(len(current_data['list_train']))]
         markup.add(*list_button)
         bot.send_message(message.chat.id, "Доступные тренировки:", reply_markup=markup)
     else:
@@ -99,7 +102,7 @@ def show_date(message, date=datetime.date.today()):
     global dict_date, current_data
     current_data['operation'] = 'choose_date'
 
-    markup = types.InlineKeyboardMarkup(row_width=7)
+    markup = types.InlineKeyboardMarkup(row_width=5)
     button_prev_week = types.InlineKeyboardButton(f'<< неделя', callback_data=f'prev_week')
     button_current_week = types.InlineKeyboardButton(f'Эта неделя', callback_data=f'current_week')
     button_next_week = types.InlineKeyboardButton(f'неделя >>', callback_data=f'next_week')
@@ -114,7 +117,7 @@ def show_date(message, date=datetime.date.today()):
                                               callback_data=f'{i}') for i in range(7)]
 
     markup.add(*list_button)
-    bot.send_message(message.chat.id, "Выбор даты для расписания:", reply_markup=markup)
+    bot.send_message(message.chat.id, "Выбор даты для расписания:", parse_mode='Markdown', reply_markup=markup)
 
 
 @bot.message_handler(commands=['show_time'])
@@ -162,15 +165,19 @@ def get_text_messages(message):
             bot.send_message(message.chat.id, "Поработаем с расписанием?", reply_markup=markup)
         elif message.text == '🔙 В главное меню':
             start(message)
+        elif message.text == '➕📅 Добавить тренировку':
+            show_list_client(message)
+
 
 
 @bot.message_handler(commands=['show_time'])
 def confirm_add(message):
+    current_data['operation'] = 'confirm_add'
     markup = types.InlineKeyboardMarkup()
-    confirm = types.InlineKeyboardButton("🆗 Добавить", callback_data='approve_add')
+    confirm = types.InlineKeyboardButton("✅ Добавить", callback_data='approve_add')
     cancel = types.InlineKeyboardButton("❌ Отменить", callback_data='cancel_add')
     markup.add(confirm, cancel)
-    bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['type_train']}*\n"
+    bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['train']['type_train']}*\n"
                                       f"Клиент *{current_data['client']['name']}* *{current_data['client']['surname']}*\n"
                                       f"На дату: *{current_data['date']}*\n"
                                       f"На время: *{current_data['time']}*?",
@@ -179,33 +186,42 @@ def confirm_add(message):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
-    try:
-        if call.message:
-            if current_data['operation'] == 'choose_client':
-                current_data['client'] = current_data['list_client'][int(call.data)]
-                show_all_type_train(call.message)
-            elif current_data['operation'] == 'choose_train':
-                current_data['type_train'] = call.data
+    if call.message:
+        if current_data['operation'] == 'choose_client':
+            current_data['client'] = current_data['list_client'][int(call.data)]
+            show_all_type_train(call.message)
+        elif current_data['operation'] == 'choose_train':
+            current_data['train'] = current_data['list_train'][int(call.data)]
+            show_date(call.message)
+        elif current_data['operation'] == 'choose_date':
+            if call.data == 'prev_week':
+                bot.delete_message(call.message.chat.id, call.message.id)
+                show_date(call.message, dict_date['0'] - datetime.timedelta(days=7))
+            elif call.data == 'current_week':
+                bot.delete_message(call.message.chat.id, call.message.id)
                 show_date(call.message)
-            elif current_data['operation'] == 'choose_date':
-                if call.data == 'prev_week':
-                    bot.delete_message(call.message.chat.id, call.message.id)
-                    show_date(call.message, dict_date['0'] - datetime.timedelta(days=7))
-                elif call.data == 'current_week':
-                    bot.delete_message(call.message.chat.id, call.message.id)
-                    show_date(call.message)
-                elif call.data == 'next_week':
-                    bot.delete_message(call.message.chat.id, call.message.id)
-                    show_date(call.message, dict_date['0'] + datetime.timedelta(days=7))
-                elif len(call.data) == 1:
-                    current_data['date'] = dict_date[call.data]
-                    show_available_time(call.message)
-            elif current_data['operation'] == 'choose_time':
-                current_data['time'] = current_data['list_time'][int(call.data)]
-                confirm_add(call.message)
-
-    except Exception as e:
-        print(repr(e))
+            elif call.data == 'next_week':
+                bot.delete_message(call.message.chat.id, call.message.id)
+                show_date(call.message, dict_date['0'] + datetime.timedelta(days=7))
+            elif len(call.data) == 1:
+                current_data['date'] = dict_date[call.data]
+                show_available_time(call.message)
+        elif current_data['operation'] == 'choose_time':
+            current_data['time'] = current_data['list_time'][int(call.data)]
+            confirm_add(call.message)
+        elif current_data['operation'] == 'confirm_add':
+            if call.data == 'approve_add':
+                try:
+                    result_request = sql.insert_in_schedule(date=current_data['date'],
+                                                            client_id=current_data['client']['client'],
+                                                            time=current_data['time'],
+                                                            rent_debt=current_data['train']['rent_debt'],
+                                                            type_train=current_data['train']['type_train'])
+                    bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
+                except:
+                    bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
+            elif call.data == 'cancel_add':
+                start(call.message)
 
 
 bot.infinity_polling()

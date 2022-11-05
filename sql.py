@@ -56,7 +56,7 @@ def insert_client_data(phone_number, name="None", surname="None"):
 
 
 def list_all_train():
-    text_query = f"SELECT type_train FROM main.trains"
+    text_query = f"SELECT * FROM main.trains"
     return execute_query(text_query)
 
 
@@ -74,3 +74,16 @@ def select_time_at_data(date):
     text_query = f"SELECT time FROM main.schedule WHERE date = '{date}'"
 
     return [i['time'] for i in execute_query(text_query)[2]]
+
+
+def insert_in_schedule(date, client_id, time, rent_debt, type_train):
+
+    subquery_find_price = f"SELECT price FROM main.price " \
+                          f"WHERE client = {client_id} and date <= '{date}' " \
+                          f"ORDER BY date DESC LIMIT 1"
+
+    text_query = f"INSERT INTO main.schedule (price, spend,date,time,rent_debt,type_train,client) " \
+                 f"VALUES (({subquery_find_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id})"
+    a = execute_query(text_query)
+    return 0
+
