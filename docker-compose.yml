@@ -41,8 +41,6 @@ services:
       - db_pg
     stdin_open: true
     tty: true
-    env_file:
-      - .env
 
 networks:
   postgres:
