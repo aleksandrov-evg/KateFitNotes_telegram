@@ -34,6 +34,7 @@ services:
     restart: unless-stopped
 
   app:
+    image: murzzik/bot_docker:bot_docker
     build: .
     restart: always
     depends_on:
