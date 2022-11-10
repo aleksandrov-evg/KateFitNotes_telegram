@@ -3,6 +3,7 @@ version: '3'
 services:
   db_pg:
     container_name: pg_db
+    user: root
     image: postgres:alpine
     environment:
       POSTGRES_USER: root
@@ -19,6 +20,7 @@ services:
 
   pgadmin:
     container_name: pgadmin
+    user: root
     image: dpage/pgadmin4
     environment:
       PGADMIN_DEFAULT_EMAIL: noemail@mail.com
