@@ -4,7 +4,7 @@ services:
   db_pg:
     container_name: pg_db
     user: root
-    image: postgres:alpine
+    image: postgres:14-alpine
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: root
