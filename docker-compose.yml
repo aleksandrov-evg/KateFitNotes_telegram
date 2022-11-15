@@ -3,7 +3,8 @@ version: '3'
 services:
   db_pg:
     container_name: pg_db
-    image: postgres:alpine
+    image: postgres:14-alpine
+    user: root
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: root
@@ -20,6 +21,7 @@ services:
   pgadmin:
     container_name: pgadmin
     image: dpage/pgadmin4
+    user: root
     environment:
       PGADMIN_DEFAULT_EMAIL: noemail@mail.com
       PGADMIN_DEFAULT_PASSWORD: root

@@ -20,6 +20,7 @@ def current_data_clear():
     global current_data, dict_date
     current_data = {
         'operation': None,
+        'process': None,
         'client': None,
         'train': None,
         'date': None,
@@ -39,6 +40,10 @@ def current_data_clear():
         '6': None,
         '7': None
     }
+
+
+def generator_inline(list_button):
+    return [types.InlineKeyboardButton(f"{i[0]}", callback_data=f'{i[1]}') for i in list_button]
 
 
 def validate_phone(message):
@@ -65,6 +70,13 @@ def start(message):
     bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
                      reply_markup=markup)
     current_data_clear()
+
+
+@bot.message_handler(commands=['show_schedule_for_client'])
+def show_schedule_for_client(message):
+    pass
+
+
 
 
 @bot.message_handler(commands=['show_all_type_train'])
@@ -158,15 +170,27 @@ def get_text_messages(message):
             bot.send_message(message.from_user.id, "Отправь мне контакт и я добавлю его в клиенты")
             allow_add_client = 1
         elif message.text == '📓 Расписание тренировок':
-            markup = types.InlineKeyboardMarkup(row_width=2)
-            button1 = types.InlineKeyboardButton("Вывести расписание", callback_data='show_schedule')
-            button2 = types.InlineKeyboardButton("Добавить тренировку", callback_data='add_train')
-            markup.add(button1, button2)
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            list_button = [("Вывести расписание на сегодня", 'show_schedule_today'),
+                           ("Вывести расписание на дату", 'show_schedule_date'),
+                           ("Вывести расписание клиента", 'show_schedule_client')
+                           ]
+            markup.add(*generator_inline(list_button))
             bot.send_message(message.chat.id, "Поработаем с расписанием?", reply_markup=markup)
         elif message.text == '🔙 В главное меню':
             start(message)
         elif message.text == '➕📅 Добавить тренировку':
+            current_data['process'] = 'add_train_in_schedule'
             show_list_client(message)
+        elif message.text == '📑 Список тренировок клиента':
+            current_data['process'] = 'list_train_for_client'
+            show_list_client(message)
+
+
+@bot.message_handler(commands=['show_schedule'])
+def show_schedule(date, client=None):
+    current_data['operation'] = 'show_schedule'
+
 
 
 
@@ -189,10 +213,12 @@ def callback_inline(call):
     if call.message:
         if current_data['operation'] == 'choose_client':
             current_data['client'] = current_data['list_client'][int(call.data)]
-            show_all_type_train(call.message)
+            if current_data['process'] == 'add_train_in_schedule':
+                show_all_type_train(call.message)
         elif current_data['operation'] == 'choose_train':
             current_data['train'] = current_data['list_train'][int(call.data)]
-            show_date(call.message)
+            if current_data['process'] == 'add_train_in_schedule':
+                show_date(call.message)
         elif current_data['operation'] == 'choose_date':
             if call.data == 'prev_week':
                 bot.delete_message(call.message.chat.id, call.message.id)
@@ -222,6 +248,8 @@ def callback_inline(call):
                     bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
             elif call.data == 'cancel_add':
                 start(call.message)
+        elif current_data['operation'] == 'confirm_add':
+            pass
 
 
 bot.infinity_polling()
