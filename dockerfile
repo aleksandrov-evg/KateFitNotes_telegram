@@ -6,4 +6,4 @@ RUN\
     apk add --no-cache postgresql-libs && \
     apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev && \
     pip install --no-cache-dir -r requirements.txt
-CMD ["python3", "bot.py"]
+CMD ["python3", "-m","bot.py"]

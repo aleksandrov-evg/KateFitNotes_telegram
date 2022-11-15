@@ -2,7 +2,7 @@ version: '3'
 
 services:
   db_pg:
-    container_name: pg_db
+    container_name: db_pg
     user: root
     image: postgres:14-alpine
     environment:
@@ -34,11 +34,13 @@ services:
     restart: unless-stopped
 
   app:
-    image: murzzik/bot_docker:bot_docker
+    image: murzzik/bot_docker:latest
     build: .
     restart: always
     depends_on:
       - db_pg
+    networks:
+      - postgres
 
 networks:
   postgres:
