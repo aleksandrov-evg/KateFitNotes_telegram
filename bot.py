@@ -77,17 +77,15 @@ def show_schedule_for_client(message):
     pass
 
 
-
-
 @bot.message_handler(commands=['show_all_type_train'])
 def show_all_type_train(message):
     current_data['list_train'] = sql.list_all_train()[2]
     markup = types.InlineKeyboardMarkup(row_width=3)
     current_data['operation'] = 'choose_train'
     if len(current_data['list_train']) > 0:
-
-        list_button = [types.InlineKeyboardButton(f"{current_data['list_train'][i]['type_train']}", callback_data=f'{i}')
-                       for i in range(len(current_data['list_train']))]
+        list_button = [
+            types.InlineKeyboardButton(f"{current_data['list_train'][i]['type_train']}", callback_data=f'{i}')
+            for i in range(len(current_data['list_train']))]
         markup.add(*list_button)
         bot.send_message(message.chat.id, "Доступные тренировки:", reply_markup=markup)
     else:
@@ -192,8 +190,6 @@ def show_schedule(date, client=None):
     current_data['operation'] = 'show_schedule'
 
 
-
-
 @bot.message_handler(commands=['show_time'])
 def confirm_add(message):
     current_data['operation'] = 'confirm_add'
@@ -237,15 +233,13 @@ def callback_inline(call):
             confirm_add(call.message)
         elif current_data['operation'] == 'confirm_add':
             if call.data == 'approve_add':
-                try:
-                    result_request = sql.insert_in_schedule(date=current_data['date'],
-                                                            client_id=current_data['client']['client'],
-                                                            time=current_data['time'],
-                                                            rent_debt=current_data['train']['rent_debt'],
-                                                            type_train=current_data['train']['type_train'])
-                    bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
-                except:
-                    bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
+                result_request = sql.insert_in_schedule(date=current_data['date'],
+                                                        client_id=current_data['client']['client'],
+                                                        time=current_data['time'],
+                                                        rent_debt=current_data['train']['rent_debt'],
+                                                        type_train=current_data['train']['type_train'])
+                bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
+                # bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
             elif call.data == 'cancel_add':
                 start(call.message)
         elif current_data['operation'] == 'confirm_add':
