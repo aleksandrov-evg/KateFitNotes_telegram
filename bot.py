@@ -19,8 +19,8 @@ work_hour = {'start': 7, 'end': 23}
 def current_data_clear():
     global current_data, dict_date
     current_data = {
-        'operation': None,
-        'process': None,
+        'process': None,    # текущий pipeline процесса
+        'operation': None,  # определенное действие в рамках процесса
         'client': None,
         'train': None,
         'date': None,
@@ -28,7 +28,8 @@ def current_data_clear():
         'price': None,
         'list_train': None,
         'list_client': None,
-        'list_time': None
+        'list_time': None,
+        'list_multi_select': None  # массив для хранения выбранных клиентов для групповых тренировок
     }
 
     dict_date = {
@@ -60,13 +61,14 @@ def validate_phone(message):
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn1 = types.KeyboardButton("➕ Новый клиент")
-    btn2 = types.KeyboardButton("📓 Расписание тренировок")
-    btn3 = types.KeyboardButton("💰 Учет тренировок")
-    btn4 = types.KeyboardButton("➕📅 Добавить тренировку")
-    markup.add(btn1, btn4)
-    markup.add(btn2, btn3)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    button_list = ("➕ Новый клиент",
+                   "📓 Расписание тренировок",
+                   "💰 Учет тренировок",
+                   "➕🤸‍ Добавить перс. тренировку",
+                   "➕👯 Добавить груп. тренировку"
+                   )
+    markup.add(*button_list)
     bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
                      reply_markup=markup)
     current_data_clear()
@@ -105,6 +107,15 @@ def show_list_client(message):
         bot.send_message(message.chat.id, "Все клиенты:", reply_markup=markup)
     else:
         bot.send_message(message.chat.id, 'Список клиентов пуст!')
+
+
+@bot.message_handler(commands=['show_time'])
+def confirm_add(message, list_current_select=[]):
+    list_client = sql.select_last_client()
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    list_button = [types.InlineKeyboardButton(f'{list_client[2][i]["name"]}', callback_data=f'{i}')
+                   for i in range(len(list_client[2]))]
+    markup.add(*list_button)
 
 
 @bot.message_handler(commands=['show_date'])
@@ -177,17 +188,12 @@ def get_text_messages(message):
             bot.send_message(message.chat.id, "Поработаем с расписанием?", reply_markup=markup)
         elif message.text == '🔙 В главное меню':
             start(message)
-        elif message.text == '➕📅 Добавить тренировку':
+        elif message.text == '➕📅 Добавить перс. тренировку':
             current_data['process'] = 'add_train_in_schedule'
             show_list_client(message)
         elif message.text == '📑 Список тренировок клиента':
             current_data['process'] = 'list_train_for_client'
             show_list_client(message)
-
-
-@bot.message_handler(commands=['show_schedule'])
-def show_schedule(date, client=None):
-    current_data['operation'] = 'show_schedule'
 
 
 @bot.message_handler(commands=['show_time'])
