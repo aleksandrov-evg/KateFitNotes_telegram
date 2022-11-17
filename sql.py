@@ -55,8 +55,8 @@ def insert_client_data(phone_number, name="None", surname="None"):
     execute_query(text_query)
 
 
-def list_all_train():
-    text_query = f"SELECT * FROM main.trains"
+def list_all_train(group):
+    text_query = f"SELECT * FROM main.trains WHERE group_train = {group}"
     return execute_query(text_query)
 
 
