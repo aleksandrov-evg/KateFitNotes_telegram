@@ -19,9 +19,10 @@ work_hour = {'start': 7, 'end': 23}
 def current_data_clear():
     global current_data, dict_date
     current_data = {
-        'process': None,  # текущий pipeline процесса
-        'operation': None,  # определенное действие в рамках процесса
-        'client': None,
+        'process': None,        # текущий pipeline процесса
+        'operation': None,      # определенное действие в рамках процесса
+        'client': None,         # клиент для одиночной трени
+        'client_multi': None,   # массив клиентов для групповой трени
         'train': None,
         'date': None,
         'time': None,
@@ -277,7 +278,10 @@ def callback_inline(call):
         elif current_data['process'] == 'add_multi_train_in_schedule':
             if current_data['operation'] == 'choose_client_multi':
                 if call.data == 'confirm_multi_list_client':
-                    pass
+                    # my_list = list(filter(lambda i: i >= 0, my_list))
+                    current_data['client_multi'] = [i['client'] for i in current_data['list_multi_select']
+                                                    if i['select']]
+                    print(current_data['client_multi'])
                 else:
                     for i in current_data['list_multi_select']:
                         if i['client'] == int(call.data):
