@@ -12,6 +12,8 @@ def execute_query(text_query):
     connection.autocommit = True
     cursor = connection.cursor()
     cursor.execute(text_query)
+    print(f'[{datetime.datetime.now()}] Запрос с текстом <<{cursor.query}>> '
+          f'выполнен с результатом <<{cursor.statusmessage}>>')
     result_query = cursor.statusmessage.split(' ')
     if result_query[0] == 'SELECT':
         array_data = cursor.fetchall()
@@ -87,3 +89,7 @@ def insert_in_schedule(date, client_id, time, rent_debt, type_train):
     a = execute_query(text_query)
     return 0
 
+def insert_test_data(column, value):
+    text_query = f"INSERT INTO main.test ({column}) " \
+                 f"VALUES ('{value}')"
+    return execute_query(text_query)
