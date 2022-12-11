@@ -12,7 +12,7 @@ def execute_query(text_query):
     connection.autocommit = True
     cursor = connection.cursor()
     cursor.execute(text_query)
-    print(f'[{datetime.datetime.now()}] Запрос с текстом <<{cursor.query}>> '
+    print(f'[{datetime.datetime.now()}]Запрос с текстом <<{cursor.query}>> '
           f'выполнен с результатом <<{cursor.statusmessage}>>')
     result_query = cursor.statusmessage.split(' ')
     if result_query[0] == 'SELECT':
