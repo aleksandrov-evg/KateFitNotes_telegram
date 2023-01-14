@@ -111,12 +111,19 @@ def show_list_client(message):
 
 
 @bot.message_handler(commands=['show_multi_list_client'])
-def show_multi_list_client(message):
+def show_multi_list_client(message, request_all_client=False):
     current_data['operation'] = 'choose_client_multi'
     if current_data['list_multi_select'] is None:
         current_data['list_multi_select'] = sql.select_last_client()[2]
         for i in current_data['list_multi_select']:
             i['select'] = False
+    if request_all_client:
+        list_all_client = sql.show_all_clients()[2]
+        selected_list = [i['client'] for i in current_data['list_multi_select'] if i['select']]
+        for client in list_all_client:
+            if client['client'] in selected_list:
+                client['select'] = True
+            current_data['list_multi_select'] = list_all_client
     markup = types.InlineKeyboardMarkup(row_width=2)
     button_list = []
     for client in current_data['list_multi_select']:
@@ -125,6 +132,7 @@ def show_multi_list_client(message):
         button_list.append(types.InlineKeyboardButton(f'{pre_fix}{client["name"]}{post_fix}',
                                                       callback_data=f'{client["client"]}'))
     markup.add(*button_list)
+    markup.add(types.InlineKeyboardButton('Показать всех клиентов', callback_data='show_all_client'))
     markup.add(types.InlineKeyboardButton('Подвердить ввод', callback_data='confirm_multi_list_client'))
     bot.send_message(message.chat.id, "Добавить клиентов в групповую тренировку:",
                      parse_mode='Markdown', reply_markup=markup)
@@ -226,10 +234,10 @@ def confirm_add(message):
     confirm = types.InlineKeyboardButton("✅ Добавить", callback_data='approve_add')
     cancel = types.InlineKeyboardButton("❌ Отменить", callback_data='cancel_add')
     markup.add(confirm, cancel)
-    if current_data['client_multi']:
+    if len(current_data['client_multi']) > 1:
         text_client = "".join([f'{i+1}. {current_data["client_multi"][i][1]}\n'
                                for i in range(len(current_data['client_multi']))])
-    elif current_data['client']:
+    else:
         text_client = f'Клиент *{current_data["client"]["name"]}* *{current_data["client"]["surname"]}*\n'
     bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['train']['type_train']}*\n"
                                       f"{text_client}"
@@ -244,6 +252,8 @@ def callback_inline(call):
         if current_data['process'] == 'add_single_train_in_schedule':
             if current_data['operation'] == 'choose_client':
                 current_data['client'] = current_data['list_client'][int(call.data)]
+                current_data['client_multi'] = [(current_data['client']['client'],
+                                                f"{current_data['client']['name']} {current_data['client']['surname']}")]
                 show_all_type_train(call.message)
             elif current_data['operation'] == 'choose_train':
                 current_data['train'] = current_data['list_train'][int(call.data)]
@@ -259,6 +269,9 @@ def callback_inline(call):
                                                     for i in current_data['list_multi_select'] if i['select']]
                     current_data['process'] = None
                     show_date(call.message)
+                elif call.data == 'show_all_client':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_multi_list_client(call.message, True)
                 else:
                     for i in current_data['list_multi_select']:
                         if i['client'] == int(call.data):
@@ -284,17 +297,33 @@ def callback_inline(call):
                 confirm_add(call.message)
             elif current_data['operation'] == 'confirm_add':
                 if call.data == 'approve_add':
-                    try:
-                        result_request = sql.insert_in_schedule(date=current_data['date'],
-                                                                client_id=current_data['client']['client'],
-                                                                time=current_data['time'],
-                                                                rent_debt=current_data['train']['rent_debt'],
-                                                                type_train=current_data['train']['type_train'])
-                        bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
-                    except:
-                        bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
+                    if current_data['client_multi'] is None:
+                        current_data['client_multi'] = [current_data['client']]
+                    elif current_data['client'] is None:
+                        current_data['client'] = [i for i in current_data]
+                    if current_data['client_multi'] is None:
+                        current_data['client_multi'] = [x['client'] for x in current_data['list_multi_select'] if x['select']]
+                    insert_data(message=call.message,
+                                date=current_data['date'],
+                                client=current_data['client']['client'],
+                                client_list=current_data['client_multi'],
+                                time=current_data['time'],
+                                rent_debt=current_data['train']['rent_debt'],
+                                type_train=current_data['train']['type_train']
+                                )
                 elif call.data == 'cancel_add':
+                    bot.send_message(call.message.chat.id, "Действие отменено!")
                     start(call.message)
+
+
+def insert_data(message, date, client, client_list, time, rent_debt, type_train):
+
+    try:
+        result_request = sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train)
+        bot.send_message(message.chat.id, "✅Запись добавлена!✅")
+    except:
+        bot.send_message(message.chat.id, "❌ Ошибка добавления записи!❌")
+
 
 
 

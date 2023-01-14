@@ -62,6 +62,12 @@ def list_all_train(group):
     return execute_query(text_query)
 
 
+def show_all_clients():
+    text_query = f'SELECT name, surname, phone AS client, add_time, false AS select ' \
+                 f'FROM main.client ORDER BY  add_time'
+    return execute_query(text_query)
+
+
 def select_last_client(number_client=0):
     text_query = f"SELECT main.schedule.client, MAX (main.schedule.date), main.client.name, main.client.surname " \
                  f"FROM main.schedule LEFT JOIN main.client ON main.schedule.client = main.client.phone " \
@@ -78,18 +84,26 @@ def select_time_at_data(date):
     return [i['time'] for i in execute_query(text_query)[2]]
 
 
-def insert_in_schedule(date, client_id, time, rent_debt, type_train):
+def insert_in_schedule(date, client_id, client_list, time, rent_debt, type_train):
 
     subquery_find_price = f"SELECT price FROM main.price " \
                           f"WHERE client = {client_id} and date <= '{date}' " \
                           f"ORDER BY date DESC LIMIT 1"
 
-    text_query = f"INSERT INTO main.schedule (price, spend,date,time,rent_debt,type_train,client) " \
-                 f"VALUES (({subquery_find_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id})"
-    a = execute_query(text_query)
-    return 0
+    text_query = f"INSERT INTO main.schedule (price, spend,date,time,rent_debt,type_train,client,client_list) " \
+                 f"VALUES (({subquery_find_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id}, ({client_list}))"
+    return execute_query(text_query)
+
 
 def insert_test_data(column, value):
     text_query = f"INSERT INTO main.test ({column}) " \
                  f"VALUES ('{value}')"
     return execute_query(text_query)
+
+
+def insert_balance(client_id, date, type_operation, count, price):
+    text_query = f"INSERT INTO main.payment (client_id, data, type, count, price) " \
+                 f"VALUES ('{client_id, date, type_operation, count, price}')"
+
+    return execute_query(text_query)
+
