@@ -16,19 +16,21 @@ work_hour = {'start': 7, 'end': 23}
 
 
 # инициализация структур и сброс к дефолту
-def current_data_clear():
+def current_data_clear(process=None):
     global current_data, dict_date
     current_data = {
-        'operation': None,
-        'process': None,
-        'client': None,
+        'process': process,     # текущий pipeline процесса
+        'operation': None,      # определенное действие в рамках процесса
+        'client': None,         # клиент для одиночной трени
+        'client_multi': None,   # массив клиентов для групповой трени
         'train': None,
         'date': None,
         'time': None,
         'price': None,
         'list_train': None,
         'list_client': None,
-        'list_time': None
+        'list_time': None,
+        'list_multi_select': None  # массив для хранения выбранных клиентов для групповых тренировок
     }
 
     dict_date = {
@@ -60,13 +62,14 @@ def validate_phone(message):
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn1 = types.KeyboardButton("➕ Новый клиент")
-    btn2 = types.KeyboardButton("📓 Расписание тренировок")
-    btn3 = types.KeyboardButton("💰 Учет тренировок")
-    btn4 = types.KeyboardButton("➕📅 Добавить тренировку")
-    markup.add(btn1, btn4)
-    markup.add(btn2, btn3)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    button_list = ("➕ Новый клиент",
+                   "📓 Расписание тренировок",
+                   "💰 Учет тренировок",
+                   "➕🤸‍ Добавить перс. тренировку",
+                   "➕👯 Добавить груп. тренировку"
+                   )
+    markup.add(*button_list)
     bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
                      reply_markup=markup)
     current_data_clear()
@@ -78,9 +81,9 @@ def show_schedule_for_client(message):
 
 
 @bot.message_handler(commands=['show_all_type_train'])
-def show_all_type_train(message):
-    current_data['list_train'] = sql.list_all_train()[2]
-    markup = types.InlineKeyboardMarkup(row_width=3)
+def show_all_type_train(message, group=False):
+    current_data['list_train'] = sql.list_all_train(group)[2]
+    markup = types.InlineKeyboardMarkup(row_width=2)
     current_data['operation'] = 'choose_train'
     if len(current_data['list_train']) > 0:
         list_button = [
@@ -107,6 +110,43 @@ def show_list_client(message):
         bot.send_message(message.chat.id, 'Список клиентов пуст!')
 
 
+@bot.message_handler(commands=['show_multi_list_client'])
+def show_multi_list_client(message, request_all_client=False):
+    current_data['operation'] = 'choose_client_multi'
+    if current_data['list_multi_select'] is None:
+        current_data['list_multi_select'] = sql.select_last_client()[2]
+        for i in current_data['list_multi_select']:
+            i['select'] = False
+    if request_all_client:
+        list_all_client = sql.show_all_clients()[2]
+        selected_list = [i['client'] for i in current_data['list_multi_select'] if i['select']]
+        for client in list_all_client:
+            if client['client'] in selected_list:
+                client['select'] = True
+            current_data['list_multi_select'] = list_all_client
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    button_list = []
+    for client in current_data['list_multi_select']:
+        pre_fix = '✅' if client['select'] else ''
+        post_fix = '✅' if client['select'] else ''
+        button_list.append(types.InlineKeyboardButton(f'{pre_fix}{client["name"]}{post_fix}',
+                                                      callback_data=f'{client["client"]}'))
+    markup.add(*button_list)
+    markup.add(types.InlineKeyboardButton('Показать всех клиентов', callback_data='show_all_client'))
+    markup.add(types.InlineKeyboardButton('Подвердить ввод', callback_data='confirm_multi_list_client'))
+    bot.send_message(message.chat.id, "Добавить клиентов в групповую тренировку:",
+                     parse_mode='Markdown', reply_markup=markup)
+
+
+@bot.message_handler(commands=['show_time'])
+def confirm_add(message, list_current_select=[]):
+    list_client = sql.select_last_client()
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    list_button = [types.InlineKeyboardButton(f'{list_client[2][i]["name"]}', callback_data=f'{i}')
+                   for i in range(len(list_client[2]))]
+    markup.add(*list_button)
+
+
 @bot.message_handler(commands=['show_date'])
 def show_date(message, date=datetime.date.today()):
     global dict_date, current_data
@@ -125,7 +165,6 @@ def show_date(message, date=datetime.date.today()):
         dict_date[f'{i}'] = date_list[i]
     list_button = [types.InlineKeyboardButton(f'{date_list[i]:%d %a}',
                                               callback_data=f'{i}') for i in range(7)]
-
     markup.add(*list_button)
     bot.send_message(message.chat.id, "Выбор даты для расписания:", parse_mode='Markdown', reply_markup=markup)
 
@@ -177,17 +216,15 @@ def get_text_messages(message):
             bot.send_message(message.chat.id, "Поработаем с расписанием?", reply_markup=markup)
         elif message.text == '🔙 В главное меню':
             start(message)
-        elif message.text == '➕📅 Добавить тренировку':
-            current_data['process'] = 'add_train_in_schedule'
+        elif message.text == '➕🤸‍ Добавить перс. тренировку':
+            current_data_clear('add_single_train_in_schedule')
             show_list_client(message)
+        elif message.text == '➕👯 Добавить груп. тренировку':
+            current_data_clear('add_multi_train_in_schedule')
+            show_all_type_train(message, True)
         elif message.text == '📑 Список тренировок клиента':
-            current_data['process'] = 'list_train_for_client'
+            current_data_clear('list_train_for_client')
             show_list_client(message)
-
-
-@bot.message_handler(commands=['show_schedule'])
-def show_schedule(date, client=None):
-    current_data['operation'] = 'show_schedule'
 
 
 @bot.message_handler(commands=['show_time'])
@@ -197,8 +234,13 @@ def confirm_add(message):
     confirm = types.InlineKeyboardButton("✅ Добавить", callback_data='approve_add')
     cancel = types.InlineKeyboardButton("❌ Отменить", callback_data='cancel_add')
     markup.add(confirm, cancel)
+    if len(current_data['client_multi']) > 1:
+        text_client = "".join([f'{i+1}. {current_data["client_multi"][i][1]}\n'
+                               for i in range(len(current_data['client_multi']))])
+    else:
+        text_client = f'Клиент *{current_data["client"]["name"]}* *{current_data["client"]["surname"]}*\n'
     bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['train']['type_train']}*\n"
-                                      f"Клиент *{current_data['client']['name']}* *{current_data['client']['surname']}*\n"
+                                      f"{text_client}"
                                       f"На дату: *{current_data['date']}*\n"
                                       f"На время: *{current_data['time']}*?",
                      parse_mode='Markdown', reply_markup=markup)
@@ -207,43 +249,82 @@ def confirm_add(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
     if call.message:
-        if current_data['operation'] == 'choose_client':
-            current_data['client'] = current_data['list_client'][int(call.data)]
-            if current_data['process'] == 'add_train_in_schedule':
+        if current_data['process'] == 'add_single_train_in_schedule':
+            if current_data['operation'] == 'choose_client':
+                current_data['client'] = current_data['list_client'][int(call.data)]
+                current_data['client_multi'] = [(current_data['client']['client'],
+                                                f"{current_data['client']['name']} {current_data['client']['surname']}")]
                 show_all_type_train(call.message)
-        elif current_data['operation'] == 'choose_train':
-            current_data['train'] = current_data['list_train'][int(call.data)]
-            if current_data['process'] == 'add_train_in_schedule':
+            elif current_data['operation'] == 'choose_train':
+                current_data['train'] = current_data['list_train'][int(call.data)]
+                current_data['process'] = None
                 show_date(call.message)
-        elif current_data['operation'] == 'choose_date':
-            if call.data == 'prev_week':
-                bot.delete_message(call.message.chat.id, call.message.id)
-                show_date(call.message, dict_date['0'] - datetime.timedelta(days=7))
-            elif call.data == 'current_week':
-                bot.delete_message(call.message.chat.id, call.message.id)
-                show_date(call.message)
-            elif call.data == 'next_week':
-                bot.delete_message(call.message.chat.id, call.message.id)
-                show_date(call.message, dict_date['0'] + datetime.timedelta(days=7))
-            elif len(call.data) == 1:
-                current_data['date'] = dict_date[call.data]
-                show_available_time(call.message)
-        elif current_data['operation'] == 'choose_time':
-            current_data['time'] = current_data['list_time'][int(call.data)]
-            confirm_add(call.message)
-        elif current_data['operation'] == 'confirm_add':
-            if call.data == 'approve_add':
-                result_request = sql.insert_in_schedule(date=current_data['date'],
-                                                        client_id=current_data['client']['client'],
-                                                        time=current_data['time'],
-                                                        rent_debt=current_data['train']['rent_debt'],
-                                                        type_train=current_data['train']['type_train'])
-                bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
-                # bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
-            elif call.data == 'cancel_add':
-                start(call.message)
-        elif current_data['operation'] == 'confirm_add':
-            pass
+        elif current_data['process'] == 'add_multi_train_in_schedule':
+            if current_data['operation'] == 'choose_train':
+                current_data['train'] = current_data['list_train'][int(call.data)]
+                show_multi_list_client(call.message)
+            elif current_data['operation'] == 'choose_client_multi':
+                if call.data == 'confirm_multi_list_client':
+                    current_data['client_multi'] = [(i['client'], f'{i["name"]} {i["surname"]}')
+                                                    for i in current_data['list_multi_select'] if i['select']]
+                    current_data['process'] = None
+                    show_date(call.message)
+                elif call.data == 'show_all_client':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_multi_list_client(call.message, True)
+                else:
+                    for i in current_data['list_multi_select']:
+                        if i['client'] == int(call.data):
+                            i['select'] = not i['select']
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_multi_list_client(call.message)
+        else:
+            if current_data['operation'] == 'choose_date':
+                if call.data == 'prev_week':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_date(call.message, dict_date['0'] - datetime.timedelta(days=7))
+                elif call.data == 'current_week':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_date(call.message)
+                elif call.data == 'next_week':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_date(call.message, dict_date['0'] + datetime.timedelta(days=7))
+                elif len(call.data) == 1:
+                    current_data['date'] = dict_date[call.data]
+                    show_available_time(call.message)
+            elif current_data['operation'] == 'choose_time':
+                current_data['time'] = current_data['list_time'][int(call.data)]
+                confirm_add(call.message)
+            elif current_data['operation'] == 'confirm_add':
+                if call.data == 'approve_add':
+                    if current_data['client_multi'] is None:
+                        current_data['client_multi'] = [current_data['client']]
+                    elif current_data['client'] is None:
+                        current_data['client'] = [i for i in current_data]
+                    if current_data['client_multi'] is None:
+                        current_data['client_multi'] = [x['client'] for x in current_data['list_multi_select'] if x['select']]
+                    insert_data(message=call.message,
+                                date=current_data['date'],
+                                client=current_data['client']['client'],
+                                client_list=current_data['client_multi'],
+                                time=current_data['time'],
+                                rent_debt=current_data['train']['rent_debt'],
+                                type_train=current_data['train']['type_train']
+                                )
+                elif call.data == 'cancel_add':
+                    bot.send_message(call.message.chat.id, "Действие отменено!")
+                    start(call.message)
+
+
+def insert_data(message, date, client, client_list, time, rent_debt, type_train):
+
+    try:
+        result_request = sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train)
+        bot.send_message(message.chat.id, "✅Запись добавлена!✅")
+    except:
+        bot.send_message(message.chat.id, "❌ Ошибка добавления записи!❌")
+
+
 
 
 bot.infinity_polling()
