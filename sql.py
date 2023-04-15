@@ -2,6 +2,8 @@ import configparser
 import psycopg2
 from psycopg2 import OperationalError
 import datetime
+import os
+
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -32,8 +34,8 @@ def create_connection():
     try:
         connection = psycopg2.connect(
             database=config["sql"]["database"],
-            user=config["sql"]["user"],
-            password=config["sql"]["password"],
+            user=os.environ['TG_ACCOUNT'],
+            password=os.environ['TG_PASS'],
             host=config["sql"]["host"],
             port=config["sql"]["port"],
         )
@@ -54,7 +56,7 @@ def insert_client_data(phone_number, name="None", surname="None"):
     search_client(phone_number)
     text_query = f"INSERT INTO main.client (phone, name, surname, add_time) " \
                  f"VALUES ({phone_number},'{name}','{surname}', '{datetime.date.today()}')"
-    execute_query(text_query)
+    return execute_query(text_query)
 
 
 def list_all_train(group):
