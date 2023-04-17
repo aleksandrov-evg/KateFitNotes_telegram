@@ -64,8 +64,8 @@ def validate_phone(message):
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     button_list = ("➕ Новый клиент",
-                   "📓 Расписание тренировок",
-                   "💰 Учет тренировок",
+                   # "📓 Расписание тренировок",
+                   # "💰 Учет тренировок",
                    "➕🤸‍ Добавить перс. тренировку",
                    "➕👯 Добавить груп. тренировку"
                    )
@@ -96,16 +96,25 @@ def show_all_type_train(message, group=False):
 
 
 @bot.message_handler(commands=['show_list_client'])
-def show_list_client(message):
-    list_client = sql.select_last_client()
+def show_list_client(message, show_all=False):
+    """Аргументом функция принимает флаг show_all
+    Если True - выводится список всех клиентов из БД (main.client)
+    ЕСли False - выводится список из посещавщих занятия
+    """
+    if show_all == False:
+        current_data['list_client'] = sql.select_last_client()[2]
+    else:
+        current_data['list_client'] = sql.show_all_clients()[2]
+
     markup = types.InlineKeyboardMarkup(row_width=2)
     current_data['operation'] = 'choose_client'
-    if int(list_client[1]) > 0:
-        current_data['list_client'] = list_client[2]
-        list_button = [types.InlineKeyboardButton(f'{list_client[2][i]["name"]}', callback_data=f'{i}')
-                       for i in range(len(list_client[2]))]
+    if len(current_data['list_client']) > 0:
+        list_button = [types.InlineKeyboardButton(f'{current_data["list_client"][i]["name"]}', callback_data=f'{i}')
+                       for i in range(len(current_data['list_client']))]
+        all_client_button = types.InlineKeyboardButton(f'Показать всех клиентов', callback_data="show_all_client_single")
         markup.add(*list_button)
-        bot.send_message(message.chat.id, "Все клиенты:", reply_markup=markup)
+        markup.add(all_client_button)
+        bot.send_message(message.chat.id, "Клиенты ранее посетившие занятия:", reply_markup=markup)
     else:
         bot.send_message(message.chat.id, 'Список клиентов пуст!')
 
@@ -132,7 +141,7 @@ def show_multi_list_client(message, request_all_client=False):
         button_list.append(types.InlineKeyboardButton(f'{pre_fix}{client["name"]}{post_fix}',
                                                       callback_data=f'{client["client"]}'))
     markup.add(*button_list)
-    markup.add(types.InlineKeyboardButton('Показать всех клиентов', callback_data='show_all_client'))
+    markup.add(types.InlineKeyboardButton('Показать всех клиентов', callback_data='show_all_client_multi'))
     markup.add(types.InlineKeyboardButton('Подвердить ввод', callback_data='confirm_multi_list_client'))
     bot.send_message(message.chat.id, "Добавить клиентов в групповую тренировку:",
                      parse_mode='Markdown', reply_markup=markup)
@@ -251,10 +260,14 @@ def callback_inline(call):
     if call.message:
         if current_data['process'] == 'add_single_train_in_schedule':
             if current_data['operation'] == 'choose_client':
-                current_data['client'] = current_data['list_client'][int(call.data)]
-                current_data['client_multi'] = [(current_data['client']['client'],
-                                                f"{current_data['client']['name']} {current_data['client']['surname']}")]
-                show_all_type_train(call.message)
+                if call.data == 'show_all_client_single':
+                    bot.delete_message(call.message.chat.id, call.message.id)
+                    show_list_client(call.message, True)
+                else:
+                    current_data['client'] = current_data['list_client'][int(call.data)]
+                    current_data['client_multi'] = [(current_data['client']['client'],
+                                                    f"{current_data['client']['name']} {current_data['client']['surname']}")]
+                    show_all_type_train(call.message)
             elif current_data['operation'] == 'choose_train':
                 current_data['train'] = current_data['list_train'][int(call.data)]
                 current_data['process'] = None
@@ -269,7 +282,7 @@ def callback_inline(call):
                                                     for i in current_data['list_multi_select'] if i['select']]
                     current_data['process'] = None
                     show_date(call.message)
-                elif call.data == 'show_all_client':
+                elif call.data == 'show_all_client_multi':
                     bot.delete_message(call.message.chat.id, call.message.id)
                     show_multi_list_client(call.message, True)
                 else:
@@ -303,10 +316,12 @@ def callback_inline(call):
                         current_data['client'] = [i for i in current_data]
                     if current_data['client_multi'] is None:
                         current_data['client_multi'] = [x['client'] for x in current_data['list_multi_select'] if x['select']]
+
                     insert_data(message=call.message,
                                 date=current_data['date'],
                                 client=current_data['client']['client'],
-                                client_list=current_data['client_multi'],
+                                client_list=f"{{{','.join([str(i[0]) for i in current_data['client_multi']])}}}",
+                                # client_list=current_data['client_multi'],
                                 time=current_data['time'],
                                 rent_debt=current_data['train']['rent_debt'],
                                 type_train=current_data['train']['type_train']
@@ -314,6 +329,10 @@ def callback_inline(call):
                 elif call.data == 'cancel_add':
                     bot.send_message(call.message.chat.id, "Действие отменено!")
                     start(call.message)
+
+#             Отдельные команды
+
+
 
 
 def insert_data(message, date, client, client_list, time, rent_debt, type_train):

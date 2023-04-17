@@ -9,6 +9,16 @@ config = configparser.ConfigParser()
 config.read("config.ini")
 
 
+if config["sql"]["host"] == '':
+    try:
+        db_ip = os.system("docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' pg_db")
+        print(f'Ip адрес базы данных:{db_ip}')
+    except:
+        print('Хост Бд не найден')
+else:
+    db_ip = config["sql"]["host"]
+
+
 def execute_query(text_query):
     connection = create_connection()
     connection.autocommit = True
@@ -36,7 +46,7 @@ def create_connection():
             database=config["sql"]["database"],
             user=os.environ['TG_ACCOUNT'],
             password=os.environ['TG_PASS'],
-            host=config["sql"]["host"],
+            host=db_ip,
             port=config["sql"]["port"],
         )
         print(f"[{datetime.datetime.now()}]Подключение к базе данных PostgreSQL прошло успешно")
@@ -93,7 +103,7 @@ def insert_in_schedule(date, client_id, client_list, time, rent_debt, type_train
                           f"ORDER BY date DESC LIMIT 1"
 
     text_query = f"INSERT INTO main.schedule (price, spend,date,time,rent_debt,type_train,client,client_list) " \
-                 f"VALUES (({subquery_find_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id}, ({client_list}))"
+                 f"VALUES (({subquery_find_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id}, '{client_list}')"
     return execute_query(text_query)
 
 
