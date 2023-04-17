@@ -30,6 +30,7 @@ def current_data_clear(process=None):
         'list_train': None,
         'list_client': None,
         'list_time': None,
+        'is_group': None,
         'list_multi_select': None  # массив для хранения выбранных клиентов для групповых тренировок
     }
 
@@ -69,7 +70,9 @@ def start(message):
                    "➕🤸‍ Добавить перс. тренировку",
                    "➕👯 Добавить груп. тренировку"
                    )
+    button_start = ("/start")
     markup.add(*button_list)
+    markup.add(button_start)
     bot.send_message(message.chat.id, text="Привет, Катюнь! Что будем делать?".format(message.from_user),
                      reply_markup=markup)
     current_data_clear()
@@ -99,8 +102,8 @@ def show_all_type_train(message, group=False):
 def show_list_client(message, show_all=False):
     """Аргументом функция принимает флаг show_all
     Если True - выводится список всех клиентов из БД (main.client)
-    ЕСли False - выводится список из посещавщих занятия
-    """
+    ЕСли False - выводится список из посещавщих занятия"""
+    current_data['is_group'] = False
     if show_all == False:
         current_data['list_client'] = sql.select_last_client()[2]
     else:
@@ -122,6 +125,10 @@ def show_list_client(message, show_all=False):
 @bot.message_handler(commands=['show_multi_list_client'])
 def show_multi_list_client(message, request_all_client=False):
     current_data['operation'] = 'choose_client_multi'
+    current_data['is_group'] = True
+    # Заглушка
+    current_data['client'] = {'client': -1}
+
     if current_data['list_multi_select'] is None:
         current_data['list_multi_select'] = sql.select_last_client()[2]
         for i in current_data['list_multi_select']:
@@ -243,11 +250,11 @@ def confirm_add(message):
     confirm = types.InlineKeyboardButton("✅ Добавить", callback_data='approve_add')
     cancel = types.InlineKeyboardButton("❌ Отменить", callback_data='cancel_add')
     markup.add(confirm, cancel)
-    if len(current_data['client_multi']) > 1:
-        text_client = "".join([f'{i+1}. {current_data["client_multi"][i][1]}\n'
+    # if len(current_data['client_multi']) > 1:
+    text_client = "".join([f'{i+1}. {current_data["client_multi"][i][1]}\n'
                                for i in range(len(current_data['client_multi']))])
-    else:
-        text_client = f'Клиент *{current_data["client"]["name"]}* *{current_data["client"]["surname"]}*\n'
+    # else:
+    #     text_client = f'Клиент *{current_data["client_multi"][0][1]}*\n'
     bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['train']['type_train']}*\n"
                                       f"{text_client}"
                                       f"На дату: *{current_data['date']}*\n"
@@ -322,6 +329,7 @@ def callback_inline(call):
                                 client=current_data['client']['client'],
                                 client_list=f"{{{','.join([str(i[0]) for i in current_data['client_multi']])}}}",
                                 # client_list=current_data['client_multi'],
+                                is_group=current_data['is_group'],
                                 time=current_data['time'],
                                 rent_debt=current_data['train']['rent_debt'],
                                 type_train=current_data['train']['type_train']
@@ -334,11 +342,9 @@ def callback_inline(call):
 
 
 
-
-def insert_data(message, date, client, client_list, time, rent_debt, type_train):
-
+def insert_data(message, date, client, client_list, time, rent_debt, type_train, is_group):
     try:
-        result_request = sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train)
+        result_request = sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train, is_group)
         bot.send_message(message.chat.id, "✅Запись добавлена!✅")
     except:
         bot.send_message(message.chat.id, "❌ Ошибка добавления записи!❌")

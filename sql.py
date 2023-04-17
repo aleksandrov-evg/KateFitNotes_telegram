@@ -96,14 +96,15 @@ def select_time_at_data(date):
     return [i['time'] for i in execute_query(text_query)[2]]
 
 
-def insert_in_schedule(date, client_id, client_list, time, rent_debt, type_train):
+def insert_in_schedule(date, client_id, client_list, time, rent_debt, type_train, is_group):
 
     subquery_find_price = f"SELECT price FROM main.price " \
                           f"WHERE client = {client_id} and date <= '{date}' " \
                           f"ORDER BY date DESC LIMIT 1"
 
-    text_query = f"INSERT INTO main.schedule (price, spend,date,time,rent_debt,type_train,client,client_list) " \
-                 f"VALUES (({subquery_find_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id}, '{client_list}')"
+    text_query = f"INSERT INTO main.schedule (price, spend,date,time,rent_debt,type_train,client,client_list, is_group) " \
+                 f"VALUES (({subquery_find_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id}, " \
+                 f"'{client_list}', {is_group})"
     return execute_query(text_query)
 
 
