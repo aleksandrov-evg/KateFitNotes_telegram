@@ -106,20 +106,21 @@ def show_list_client(message, show_all=False):
     current_data['is_group'] = False
     if show_all == False:
         current_data['list_client'] = sql.select_last_client()[2]
+        text_message = 'Клиенты ранее посетившие занятия:'
     else:
         current_data['list_client'] = sql.show_all_clients()[2]
-
+        text_message = 'Все клиенты из базы:'
     markup = types.InlineKeyboardMarkup(row_width=2)
     current_data['operation'] = 'choose_client'
     if len(current_data['list_client']) > 0:
         list_button = [types.InlineKeyboardButton(f'{current_data["list_client"][i]["name"]}', callback_data=f'{i}')
                        for i in range(len(current_data['list_client']))]
-        all_client_button = types.InlineKeyboardButton(f'Показать всех клиентов', callback_data="show_all_client_single")
         markup.add(*list_button)
-        markup.add(all_client_button)
-        bot.send_message(message.chat.id, "Клиенты ранее посетившие занятия:", reply_markup=markup)
     else:
         bot.send_message(message.chat.id, 'Список клиентов пуст!')
+    all_client_button = types.InlineKeyboardButton(f'Показать всех клиентов', callback_data="show_all_client_single")
+    markup.add(all_client_button)
+    bot.send_message(message.chat.id, f"{text_message}", reply_markup=markup)
 
 
 @bot.message_handler(commands=['show_multi_list_client'])
