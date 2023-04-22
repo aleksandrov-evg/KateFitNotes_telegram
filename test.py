@@ -3,15 +3,15 @@ import psycopg2
 import os
 
 
-# def test_create_connection():
-#     connection = psycopg2.connect(
-#         database='pg_db',
-#         user=os.environ['TG_ACCOUNT'],
-#         password=os.environ['TG_PASS'],
-#         host='172.22.0.3',
-#         port=config["sql"]["port"],
-#     )
-#     assert connection is not None
+def test_create_connection():
+    connection = psycopg2.connect(
+        database='Kate_fitness_test',
+        user=os.getenv('TG_ACCOUNT'),
+        password=os.getenv('TG_PASS'),
+        host='92.38.241.168',
+        port='5433',
+    )
+    assert connection is not None
 
 
 def test_connection_sql():
