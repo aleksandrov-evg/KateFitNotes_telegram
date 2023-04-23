@@ -8,8 +8,8 @@ def test_create_connection():
         database='Kate_fitness_test',
         user=os.getenv('TG_ACCOUNT'),
         password=os.getenv('TG_PASS'),
-        host='92.38.241.168',
-        port='5433',
+        host=,
+        port=,
     )
     assert connection is not None
 
