@@ -12,9 +12,9 @@ config.read("config.ini")
 if config["sql"]["host"] == '':
     try:
         db_ip = os.system("docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' pg_db")
-        print(f'Ip адрес базы данных:{db_ip}')
+        print(f'Ip address DB:{db_ip}')
     except:
-        print('Хост Бд не найден')
+        print('Host DB not found')
 else:
     db_ip = config["sql"]["host"]
 
@@ -24,8 +24,8 @@ def execute_query(text_query):
     connection.autocommit = True
     cursor = connection.cursor()
     cursor.execute(text_query)
-    print(f'[{datetime.datetime.now()}]Запрос с текстом <<{cursor.query}>> '
-          f'выполнен с результатом <<{cursor.statusmessage}>>')
+    print(f'[{datetime.datetime.now()}]Query with text <<{cursor.query}>> '
+          f'SUCCESS with result: <<{cursor.statusmessage}>>')
     result_query = cursor.statusmessage.split(' ')
     if result_query[0] == 'SELECT':
         array_data = cursor.fetchall()
@@ -49,9 +49,9 @@ def create_connection():
             host=db_ip,
             port=config["sql"]["port"],
         )
-        print(f"[{datetime.datetime.now()}]Подключение к базе данных PostgreSQL прошло успешно")
+        print(f"[{datetime.datetime.now()}]Success connection with PostgreSQL")
     except OperationalError as e:
-        print(f"[{datetime.datetime.now()}]Произошла ошибка '{e}'")
+        print(f"[{datetime.datetime.now()}]ERROR connection with PostgreSQL '{e}'")
     return connection
 
 
