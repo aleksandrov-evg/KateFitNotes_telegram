@@ -36,7 +36,21 @@ def execute_query(text_query):
         for x in array_data:
             result_list.append(dict(zip(column_name, x)))
         result_query.append(result_list)
+
+        # тестовый блок по изменению результата возвращаемого значения
+        # rows = cursor.fetchall()
+        # columns = [desc[0] for desc in cursor.description]
+        # for row in rows:
+        #     row_dict = dict(zip(columns, row))
+
         return result_query
+
+    elif result_query[0] == 'INSERT':
+        return {
+            'operation':    result_query[0],
+            'failed':       int(result_query[1]),
+            'successful':   int(result_query[2])
+        }
 
 
 def create_connection():
@@ -63,7 +77,6 @@ def search_client(phone_number):
 
 
 def insert_client_data(phone_number, name="None", surname="None"):
-    search_client(phone_number)
     text_query = f"INSERT INTO main.client (phone, name, surname, add_time) " \
                  f"VALUES ({phone_number},'{name}','{surname}', '{datetime.date.today()}')"
     return execute_query(text_query)

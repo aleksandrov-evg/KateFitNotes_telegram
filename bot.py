@@ -59,7 +59,7 @@ def validate_phone(message):
             return int(phone_number[1:])
     else:
         bot.send_message(message.from_user.id, "Операция не выполнена! Не верный формат номера")
-        return 0
+        return None
 
 
 @bot.message_handler(commands=['button_return_to_start'])
@@ -214,29 +214,35 @@ def show_available_time(message):
     bot.send_message(message.chat.id, f'Выбор времени на дату: {current_data["operation"]}', reply_markup=markup)
 
 
-@bot.message_handler(content_types=['text', 'contact'])
-def get_text_messages(message):
-    global allow_add_client
-    if message.content_type == 'contact':
-        if allow_add_client == 1:
-            phone_number = validate_phone(message)
+@bot.message_handler(content_types=['contact'])
+def add_new_client(message):
+    if current_data['operation'] == 'add_client':
+        phone_number = validate_phone(message)
+        if phone_number is not None:
             search_client = sql.search_client(phone_number)
-            if not phone_number:
+            if int(search_client[1]) != 0:
                 bot.send_message(message.from_user.id, "Такой клиент уже существует в базе")
             else:
-                if int(search_client[1]) == 0:
-                    sql.insert_client_data(phone_number,
-                                           message.contact.first_name,
-                                           message.contact.last_name)
+                result = sql.insert_client_data(phone_number,
+                                                message.contact.first_name,
+                                                message.contact.last_name)
+                if result['failed'] == 0:
                     bot.send_message(message.from_user.id, "Ага, добавил")
+                else:
+                    bot.send_message(message.from_user.id, "Ошибка добавления")
         else:
-            bot.send_message(message.from_user.id, "Для добавления клиента нужно выбрать пункт <➕ Новый клиент>")
-        allow_add_client = 0
-    elif message.content_type == 'text':
+            start(message)
+
+    else:
+        bot.send_message(message.from_user.id, "Для добавления клиента нужно выбрать пункт <➕ Новый клиент>")
+
+
+@bot.message_handler(content_types=['text'])
+def get_text_messages(message):
+    if message.content_type == 'text':
         if message.text == '➕ Новый клиент':
-            print('OK')
             bot.send_message(message.from_user.id, "Отправь мне контакт и я добавлю его в клиенты")
-            allow_add_client = 1
+            current_data['operation'] = 'add_client'
         elif message.text == '📓 Расписание тренировок':
             markup = types.InlineKeyboardMarkup(row_width=1)
             list_button = [("Вывести расписание на сегодня", 'show_schedule_today'),
@@ -362,9 +368,6 @@ def callback_inline(call):
                 elif call.data == 'cancel_add':
                     bot.send_message(call.message.chat.id, "Действие отменено!")
                     start(call.message)
-
-
-#             Отдельные команды
 
 
 def insert_data(message, date, client, client_list, time, rent_debt, type_train, is_group, train_price):
