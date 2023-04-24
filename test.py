@@ -1,15 +1,19 @@
 import sql
 import psycopg2
 import os
+import configparser
 
 
 def test_create_connection():
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+
     connection = psycopg2.connect(
-        database='Kate_fitness_test',
+        database=config["sql"]["database"],
         user=os.getenv('TG_ACCOUNT'),
         password=os.getenv('TG_PASS'),
-        host='92.38.241.168',
-        port='5433',
+        host=config["sql"]["ip"],
+        port=config["sql"]["port"],
     )
     assert connection is not None
 
