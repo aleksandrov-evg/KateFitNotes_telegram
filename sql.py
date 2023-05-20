@@ -52,6 +52,32 @@ def execute_query(text_query):
             'successful':   int(result_query[2])
         }
 
+def execute_query_return_dict(text_query):
+    connection = create_connection()
+    connection.autocommit = True
+    cursor = connection.cursor()
+    cursor.execute(text_query)
+    print(f'[{datetime.datetime.now()}]Query with text <<{cursor.query}>> '
+          f'SUCCESS with result: <<{cursor.statusmessage}>>')
+    result_query = cursor.statusmessage.split(' ')
+    if result_query[0] == 'SELECT':
+
+        # тестовый блок по изменению результата возвращаемого значения
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+
+        return result_query
+
+    elif result_query[0] == 'INSERT':
+        return {
+            'operation':    result_query[0],
+            'failed':       int(result_query[1]),
+            'successful':   int(result_query[2])
+        }
+
+
 
 def create_connection():
     connection = None
@@ -134,3 +160,8 @@ def insert_balance(client_id, date, type_operation, count, price):
 
     return execute_query(text_query)
 
+
+def schedule_query_by_date(list_param, date):
+    text_query = f"SELECT {', '.join(list_param)}, main.client.name, main.client.surname FROM main.schedule " \
+                 f"LEFT JOIN main.client ON main.client.phone=main.schedule.client WHERE date = '{date}'"
+    return execute_query(text_query)

@@ -4,6 +4,30 @@ from telebot import types
 import sql
 import datetime
 
+list_param_schedule = ['client', 'id', 'price', 'date', 'time', 'rent_debt', 'type_train', 'client_list']
+
+class Client:
+    def __init__(self, name, surname, phone):
+        self.name = name
+        self.surname = surname
+        self.phone = phone
+
+
+class Record_in_schedule(Client):
+    def __init__(self, *args, **kwargs):
+        self.list_param = ['client', 'id', 'price', 'date', 'time', 'rent_debt', 'type_train', 'client_list']
+        super().__init__(
+            phone=kwargs['client'],
+            name=kwargs['name'],
+            surname=kwargs['surname'])
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+
+
+
+
 config = configparser.ConfigParser()
 config.read("config.ini")
 token = config["main"]["TOKEN"]
@@ -32,7 +56,9 @@ def current_data_clear(process=None):
         'list_time': None,
         'is_group': None,
         'train_price': None,
+        'service_data': None,
         'list_multi_select': None  # массив для хранения выбранных клиентов для групповых тренировок
+
     }
 
     dict_date = {
@@ -95,6 +121,14 @@ def input_train_price(message):
 @bot.message_handler(commands=['show_schedule_for_client'])
 def show_schedule_for_client(message):
     pass
+
+
+
+@bot.message_handler(commands=['schedule_query_by_date'])
+def schedule_query_by_date(message):
+    result = sql.schedule_query_by_date(list_param_schedule, current_data['service_data']['date_for_search'])
+    pass
+
 
 
 @bot.message_handler(commands=['show_all_type_train'])
@@ -370,9 +404,14 @@ def callback_inline(call):
                     start(call.message)
 
 
+
+
+
+
 def insert_data(message, date, client, client_list, time, rent_debt, type_train, is_group, train_price):
     try:
-        result_request = sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train, is_group, train_price)
+        result_request = sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train, is_group,
+                                                train_price)
         bot.send_message(message.chat.id, "✅Запись добавлена!✅")
     except:
         bot.send_message(message.chat.id, "❌ Ошибка добавления записи!❌")
