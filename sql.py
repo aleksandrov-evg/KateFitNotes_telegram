@@ -129,5 +129,6 @@ def get_incom_all_month_balance():
                         "(sum(price) - sum(rent_debt)) as income," \
                         "DATE_TRUNC('month', date) AS month, " \
                         "DATE_TRUNC('year', date) AS year " \
-                 "FROM main.schedule GROUP BY month, year"
+                 "FROM main.schedule GROUP BY month, year " \
+                 "ORDER BY month ASC, year DESC"
     return execute_query(text_query)

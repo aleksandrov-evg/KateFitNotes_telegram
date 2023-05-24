@@ -258,7 +258,20 @@ def get_text_messages(message):
             show_list_client(message)
         elif message.text == '💰 Отчет по тренировкам':
             result = sql.get_incom_all_month_balance()
-            start()
+
+            test = "\n".join(
+                [
+                    f'Дата: {_["month"].strftime("%m.%Y")}\n'
+                    f'Прибыль: {_["income"]}\n'
+                    f'Аренда: {_["sum_rent"]}\n'
+                    f'Всего: {_["total_sum"]}\n'
+                    f'========================='
+                    for _ in result[2]
+                ]
+            )
+
+            bot.send_message(message.chat.id, text=test)
+            start(message)
 
         elif current_data['operation'] == 'input_train_price':
             if message.text.isdigit():
