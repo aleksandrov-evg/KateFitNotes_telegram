@@ -72,7 +72,7 @@ def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     button_list = ("➕ Новый клиент",
                    # "📓 Расписание тренировок",
-                   # "💰 Учет тренировок",
+                   "💰 Отчет по тренировкам",
                    "➕🤸‍ Добавить перс. тренировку",
                    "➕👯 Добавить груп. тренировку",
                    # "🛠 Настройка тренировок"
@@ -256,6 +256,10 @@ def get_text_messages(message):
         elif message.text == '📑 Список тренировок клиента':
             current_data_clear('list_train_for_client')
             show_list_client(message)
+        elif message.text == '💰 Отчет по тренировкам':
+            result = sql.get_incom_all_month_balance()
+            start()
+
         elif current_data['operation'] == 'input_train_price':
             if message.text.isdigit():
                 current_data['train_price'] = int(message.text)
