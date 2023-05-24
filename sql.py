@@ -121,3 +121,13 @@ def insert_balance(client_id, date, type_operation, count, price):
 
     return execute_query(text_query)
 
+
+def get_incom_all_month_balance():
+    text_query = "SELECT " \
+                        "sum(price) as total_sum, " \
+                        "sum(rent_debt) as sum_rent, " \
+                        "(sum(price) - sum(rent_debt)) as income," \
+                        "DATE_TRUNC('month', date) AS month, " \
+                        "DATE_TRUNC('year', date) AS year " \
+                 "FROM main.schedule GROUP BY month, year"
+    return execute_query(text_query)
