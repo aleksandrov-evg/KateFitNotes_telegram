@@ -261,10 +261,10 @@ def get_text_messages(message):
 
             test = "\n".join(
                 [
-                    f'Дата: {_["month"].strftime("%m.%Y")}\n'
-                    f'Прибыль: {_["income"]}\n'
-                    f'Аренда: {_["sum_rent"]}\n'
-                    f'Всего: {_["total_sum"]}\n'
+                    f'Дата:     **{_["month"].strftime("%m.%Y")}**\n'
+                    f'Прибыль:  **{_["income"]}**\n'
+                    f'Аренда:   **{_["sum_rent"]}**\n'
+                    f'Всего:    **{_["total_sum"]}**\n'
                     f'========================='
                     for _ in result[2]
                 ]
