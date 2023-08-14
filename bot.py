@@ -179,9 +179,13 @@ def confirm_add(message, list_current_select=[]):
 
 
 @bot.message_handler(commands=['show_date'])
-def show_date(message, date=datetime.date.today()):
+def show_date(message, date=None):
     global dict_date, current_data
-    current_data['operation'] = 'choose_date'
+
+    if date is None:
+        date = datetime.date.today()
+
+    current_data["operation"] = 'choose_date'
 
     markup = types.InlineKeyboardMarkup(row_width=5)
     button_prev_week = types.InlineKeyboardButton(f'<< неделя', callback_data=f'prev_week')
