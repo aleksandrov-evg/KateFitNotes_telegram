@@ -31,7 +31,7 @@ services:
     volumes:
       - ./pg_db_test:/data/postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     networks:
       postgres:
         ipv4_address: 172.18.0.10
