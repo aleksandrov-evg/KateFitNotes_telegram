@@ -1,4 +1,4 @@
-FROM python:3.9-alpine
+FROM python:3.11-alpine
 WORKDIR /usr/src/bot
 COPY bot.py config.ini sql.py requirements.txt test.py ./
 RUN \
