@@ -1,8 +1,10 @@
 import configparser
 import telebot
-from telebot import types
 import sql
 import datetime
+
+from telebot import types
+from src.Kate_Fit_Notes.process_class import CurrentData
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -13,11 +15,13 @@ current_data = {}
 current_operation = None
 dict_date = {}
 work_hour = {'start': 7, 'end': 23}
+current_data_new = CurrentData()
 
 
 # инициализация структур и сброс к дефолту
 def current_data_clear(process=None):
-    global current_data, dict_date
+    global current_data, dict_date, current_data_new
+    current_data_new = CurrentData()
     current_data = {
         'process': process,  # текущий pipeline процесса
         'operation': None,  # определенное действие в рамках процесса
@@ -32,7 +36,10 @@ def current_data_clear(process=None):
         'list_time': None,
         'is_group': None,
         'train_price': None,
-        'list_multi_select': None  # массив для хранения выбранных клиентов для групповых тренировок
+        'list_multi_select': None,  # массив для хранения выбранных клиентов для групповых тренировок
+        'id_prepaid_row': None,
+        'id_prepaid_data': None,
+        'set_is_complete_true': False
     }
 
     dict_date = {
@@ -71,6 +78,7 @@ def button_return_to_start():
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     button_list = ("➕ Новый клиент",
+                   "Добавить оплату",
                    # "📓 Расписание тренировок",
                    "💰 Отчет по тренировкам",
                    "➕🤸‍ Добавить перс. тренировку",
@@ -85,10 +93,49 @@ def start(message):
     current_data_clear()
 
 
+@bot.message_handler(commands=['universal_text_input'])
+def universal_text_input(text_message, command, message):
+    current_data_new.operation = command
+    bot.send_message(message.chat.id, text_message,
+                     reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).add(button_return_to_start()))
+
+
 @bot.message_handler(commands=['input_train_price'])
 def input_train_price(message):
     current_data['operation'] = 'input_train_price'
-    bot.send_message(message.chat.id, 'Укажи сумму тренировки',
+
+    additional_text = ""
+    if not current_data['is_group']:
+        prepaid_train = sql.get_active_prepaid_for_client(
+            client_id=current_data['client']['client'],
+            type_train_id=current_data['train']['id']
+        )
+        current_data['id_prepaid_data'] = prepaid_train[2]
+
+        match len(prepaid_train[2]):
+            case 0:
+                # если нет предоплаты, указываем последние заполненые
+                last_train_price = sql.get_last_price_for_train(
+                    client_id=current_data['client']['client'],
+                    type_train_id=current_data['train']['id']
+                )
+                if len(last_train_price[2]) > 0:
+                    additional_text = 'Стоимость последних тренировок:\n'
+                    for i in last_train_price[2]:
+                        additional_text += f"\n{i['price']}"
+            case _:
+                if int(prepaid_train[1]) == 1:
+                    additional_text = f"Стоимость предоплаченных тренировок {prepaid_train[2][0]['price_per_train']}"
+                    current_data['id_prepaid_row'] = [_['id'] for _ in prepaid_train[2]]
+                elif int(prepaid_train[1]) > 1:
+                    additional_text = (f"!!!У клиента {prepaid_train[1]} не закрытых тренировок!!!"
+                                       f"id {[_['id'] for _ in prepaid_train[2]]}")
+                    bot.send_message(message.chat.id, f'Запись не будет добавлена!',
+                                     reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).add(
+                                         button_return_to_start()))
+                    start(message)
+
+    bot.send_message(message.chat.id, f'Укажи сумму тренировки\n{additional_text}',
                      reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).add(button_return_to_start()))
 
 
@@ -100,8 +147,10 @@ def show_schedule_for_client(message):
 @bot.message_handler(commands=['show_all_type_train'])
 def show_all_type_train(message, group=False):
     current_data['list_train'] = sql.list_all_train(group)[2]
+    current_data_new.list_train = current_data['list_train']
     markup = types.InlineKeyboardMarkup(row_width=2)
     current_data['operation'] = 'choose_train'
+    current_data_new.operation = 'choose_train'
     if len(current_data['list_train']) > 0:
         list_button = [
             types.InlineKeyboardButton(f"{current_data['list_train'][i]['type_train']}", callback_data=f'{i}')
@@ -114,18 +163,24 @@ def show_all_type_train(message, group=False):
 
 @bot.message_handler(commands=['show_list_client'])
 def show_list_client(message, show_all=False):
+    global current_data_new
     """Аргументом функция принимает флаг show_all
     Если True - выводится список всех клиентов из БД (main.client)
     ЕСли False - выводится список из посещавщих занятия"""
     current_data['is_group'] = False
-    if show_all == False:
+    current_data_new.is_group = False
+
+    if not show_all:
         current_data['list_client'] = sql.select_last_client()[2]
+        current_data_new.list_client = current_data['list_client']
         text_message = 'Клиенты ранее посетившие занятия:'
     else:
         current_data['list_client'] = sql.show_all_clients()[2]
+        current_data_new.list_client = current_data['list_client']
         text_message = 'Все клиенты из базы:'
     markup = types.InlineKeyboardMarkup(row_width=2)
     current_data['operation'] = 'choose_client'
+    current_data_new.operation = 'choose_client'
     if len(current_data['list_client']) > 0:
         list_button = [types.InlineKeyboardButton(f'{current_data["list_client"][i]["name"]}', callback_data=f'{i}')
                        for i in range(len(current_data['list_client']))]
@@ -279,6 +334,9 @@ def get_text_messages(message):
             )
 
             start(message)
+        elif message.text == "Добавить оплату":
+            current_data_new.process = "add_money_in_accounting"
+            show_list_client(message)
 
         elif current_data['operation'] == 'input_train_price':
             if message.text.isdigit():
@@ -287,6 +345,23 @@ def get_text_messages(message):
             else:
                 bot.send_message(message.chat.id, 'Введено не корректное значение!')
                 input_train_price(message)
+
+        match current_data_new.process, current_data_new.operation:
+            case 'add_money_in_accounting', 'total_summ_and_number_train':
+
+                input_result = message.text.split(" ")
+                if len(input_result) == 2 and input_result[0].isdigit() and input_result[1].isdigit():
+                    current_data_new.summ = int(input_result[0])
+                    current_data_new.count_train = int(input_result[1])
+                    confirm_add_in_accounting(message)
+                else:
+                    universal_text_input(
+                        text_message=f"Не корректно введено значение! {message.text}\n"
+                                     "Введи общую сумму и количество тренировок\n"
+                                     "Например:<1000 10>",
+                        command='total_summ_and_number_train',
+                        message=message
+                    )
 
 
 @bot.message_handler(commands=['confirm_add'])
@@ -301,50 +376,144 @@ def confirm_add(message):
                            for i in range(len(current_data['client_multi']))])
     # else:
     #     text_client = f'Клиент *{current_data["client_multi"][0][1]}*\n'
+
+    # проверка предоплаты
+    additonal_info = ""
+    if not current_data['is_group'] and current_data['id_prepaid_row'] is not None:
+
+        if len(current_data['id_prepaid_row']) > 1:
+            additonal_info += "\n!У клиента больше 1 не закрытого аванса!\n"
+
+        elif len(current_data['id_prepaid_row']) != 0:
+            prepaid_train = sql.get_count_prepaid_train(
+                client_id=current_data['client']['client'],
+                type_train_id=current_data['train']['id']
+            )
+            if len(prepaid_train[2]) == 1:
+
+                current_data['set_is_complete_true'] = current_data['id_prepaid_row'][0] \
+                    if prepaid_train[2][0]['count_train'] - prepaid_train[2][0]['count'] == 1 \
+                    else False
+
+                additonal_info = (f"\n!У клиента есть пред оплаченные тренировки: "
+                                  f"{prepaid_train[2][0]['count_train'] - prepaid_train[2][0]['count']}\n шт!")
+            else:
+                additonal_info = (f"!!!У клиента {prepaid_train[1]} не закрытых предоплаты\n"
+                                  f"id: {[_['id'] for _ in prepaid_train[2]]}")
+
     bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['train']['type_train']}*\n"
                                       f"{text_client}"
                                       f"На дату: *{current_data['date']}*\n"
                                       f"На время: *{current_data['time']}*\n"
-                                      f"Цена тренировки *{current_data['train_price']}*?",
+                                      f"Цена тренировки *{current_data['train_price']}*?"
+                                      f"{additonal_info}",
+                     parse_mode='Markdown', reply_markup=markup)
+
+
+@bot.message_handler(commands=['confirm_add_accounting'])
+def confirm_add_in_accounting(message):
+    current_data_new.operation = 'confirm_add_accounting'
+    markup = types.InlineKeyboardMarkup()
+    confirm = types.InlineKeyboardButton("✅ Добавить", callback_data='approve_add')
+    cancel = types.InlineKeyboardButton("❌ Отменить", callback_data='cancel_add')
+    markup.add(confirm, cancel)
+    bot.send_message(message.chat.id,
+                     f"Добавление предоплаты\n"
+                     f"Клиент: {current_data_new.client['name']} {current_data_new.client['surname']}\n"
+                     f"Тренировка: {current_data_new.train['type_train']}\n"
+                     f"Общая сумма: {current_data_new.summ}\n"
+                     f"Количество тренировок: {current_data_new.count_train}\n"
+                     f"Стоимость 1 тренировки: {current_data_new.summ / current_data_new.count_train}\n",
                      parse_mode='Markdown', reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
     if call.message:
-        if current_data['process'] == 'add_single_train_in_schedule':
-            if current_data['operation'] == 'choose_client':
-                if call.data == 'show_all_client_single':
-                    bot.delete_message(call.message.chat.id, call.message.id)
-                    show_list_client(call.message, True)
-                else:
-                    current_data['client'] = current_data['list_client'][int(call.data)]
-                    current_data['client_multi'] = [(current_data['client']['client'],
-                                                     f"{current_data['client']['name']} {current_data['client']['surname']}")]
-                    show_all_type_train(call.message)
-            elif current_data['operation'] == 'choose_train':
-                current_data['train'] = current_data['list_train'][int(call.data)]
-                current_data['process'] = None
-                show_date(call.message)
-        elif current_data['process'] == 'add_multi_train_in_schedule':
-            if current_data['operation'] == 'choose_train':
-                current_data['train'] = current_data['list_train'][int(call.data)]
-                show_multi_list_client(call.message)
-            elif current_data['operation'] == 'choose_client_multi':
-                if call.data == 'confirm_multi_list_client':
-                    current_data['client_multi'] = [(i['client'], f'{i["name"]} {i["surname"]}')
-                                                    for i in current_data['list_multi_select'] if i['select']]
+        if current_data.get('process') is not None:
+            if current_data['process'] == 'add_single_train_in_schedule':
+                if current_data['operation'] == 'choose_client':
+
+                    match call.data:
+                        case 'show_all_client_single':
+                            bot.delete_message(call.message.chat.id, call.message.id)
+                            show_list_client(call.message, True)
+                        case _:
+                            current_data['client'] = current_data['list_client'][int(call.data)]
+                            current_data['client_multi'] = [(current_data['client']['client'],
+                                                             f"{current_data['client']['name']} {current_data['client']['surname']}")]
+                            show_all_type_train(call.message)
+
+                elif current_data['operation'] == 'choose_train':
+                    current_data['train'] = current_data['list_train'][int(call.data)]
                     current_data['process'] = None
                     show_date(call.message)
-                elif call.data == 'show_all_client_multi':
-                    bot.delete_message(call.message.chat.id, call.message.id)
-                    show_multi_list_client(call.message, True)
-                else:
-                    for i in current_data['list_multi_select']:
-                        if i['client'] == int(call.data):
-                            i['select'] = not i['select']
-                    bot.delete_message(call.message.chat.id, call.message.id)
+
+            elif current_data['process'] == 'add_multi_train_in_schedule':
+                if current_data['operation'] == 'choose_train':
+                    current_data['train'] = current_data['list_train'][int(call.data)]
                     show_multi_list_client(call.message)
+                elif current_data['operation'] == 'choose_client_multi':
+                    if call.data == 'confirm_multi_list_client':
+                        current_data['client_multi'] = [(i['client'], f'{i["name"]} {i["surname"]}')
+                                                        for i in current_data['list_multi_select'] if i['select']]
+                        current_data['process'] = None
+                        show_date(call.message)
+                    elif call.data == 'show_all_client_multi':
+                        bot.delete_message(call.message.chat.id, call.message.id)
+                        show_multi_list_client(call.message, True)
+                    else:
+                        for i in current_data['list_multi_select']:
+                            if i['client'] == int(call.data):
+                                i['select'] = not i['select']
+                        bot.delete_message(call.message.chat.id, call.message.id)
+                        show_multi_list_client(call.message)
+
+        elif current_data_new.process == "add_money_in_accounting":
+            match current_data_new.operation:
+
+                case "choose_client":
+                    match call.data:
+                        case 'show_all_client_single':
+                            bot.delete_message(call.message.chat.id, call.message.id)
+                            show_list_client(call.message, True)
+                        case _:
+                            current_data_new.client = current_data_new.list_client[int(call.data)]
+                            current_data_new.client_multi = [
+                                (
+                                    current_data_new.client['client'],
+                                    f"{current_data_new.client['name']} {current_data_new.client['surname']}"
+                                )
+                            ]
+                            show_all_type_train(call.message)
+
+                case 'choose_train':
+                    current_data_new.train = current_data_new.list_train[int(call.data)]
+                    universal_text_input(
+                        text_message="Введи общую сумму и количество тренировок\n"
+                                     "Например:<1000 10>",
+                        command='total_summ_and_number_train',
+                        message=call.message
+                    )
+                case 'confirm_add_accounting':
+                    match call.data:
+                        case 'approve_add':
+                            try:
+                                result = sql.insert_in_accounting(
+                                    client_id=current_data_new.client['client'],
+                                    summ=current_data_new.summ,
+                                    count_train=current_data_new.count_train,
+                                    price_per_train=current_data_new.summ / current_data_new.count_train,
+                                    type_train_id=current_data_new.train['id']
+                                )
+                                bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
+                            except:
+                                bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
+                        case 'cancel_add':
+                            bot.send_message(call.message.chat.id, "Действие отменено!")
+                            start(call.message)
+
+
         else:
             if current_data['operation'] == 'choose_date':
                 if call.data == 'prev_week':
@@ -381,19 +550,24 @@ def callback_inline(call):
                                 time=current_data['time'],
                                 rent_debt=current_data['train']['rent_debt'],
                                 type_train=current_data['train']['type_train'],
-                                train_price=current_data['train_price']
+                                train_price=current_data['train_price'],
+                                type_train_id=current_data['train']['id'],
+                                set_is_complete_true=current_data['set_is_complete_true']
                                 )
-                elif call.data == 'cancel_add':
-                    bot.send_message(call.message.chat.id, "Действие отменено!")
-                    start(call.message)
+            elif call.data == 'cancel_add':
+                bot.send_message(call.message.chat.id, "Действие отменено!")
+                start(call.message)
 
 
 #             Отдельные команды
 
 
-def insert_data(message, date, client, client_list, time, rent_debt, type_train, is_group, train_price):
+def insert_data(message, date, client, client_list, time, rent_debt, type_train, is_group, train_price, type_train_id,
+                set_is_complete_true):
     try:
-        result_request = sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train, is_group, train_price)
+        sql.insert_in_schedule(date, client, client_list, time, rent_debt, type_train, is_group,
+                                                train_price, type_train_id, set_is_complete_true)
+
         bot.send_message(message.chat.id, "✅Запись добавлена!✅")
     except:
         bot.send_message(message.chat.id, "❌ Ошибка добавления записи!❌")

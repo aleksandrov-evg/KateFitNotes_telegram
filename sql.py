@@ -96,16 +96,27 @@ def select_time_at_data(date):
     return [i['time'] for i in execute_query(text_query)[2]]
 
 
-def insert_in_schedule(date, client_id, client_list, time, rent_debt, type_train, is_group, train_price):
+def insert_in_schedule(date, client_id, client_list, time, rent_debt, type_train, is_group, train_price, type_train_id,
+                       set_is_complete_true=False
+                       ):
 
     if train_price is None:
         train_price = f"SELECT price FROM main.price " \
                               f"WHERE client = {client_id} and date <= '{date}' " \
                               f"ORDER BY date DESC LIMIT 1"
 
-    text_query = f"INSERT INTO main.schedule (price, spend,date,time,rent_debt,type_train,client,client_list, is_group) " \
-                 f"VALUES (({train_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id}, " \
-                 f"'{client_list}', {is_group})"
+    text_is_complete = f'UPDATE main.accounting SET is_complete=true WHERE id={set_is_complete_true}; '
+
+    text_query = (
+        f"BEGIN; "
+        f"INSERT INTO main.schedule "
+        f"(price, spend,date,time,rent_debt,type_train,client,client_list, is_group, type_train_id)" 
+        f"VALUES (({train_price}),False, '{date}','{time}',{rent_debt}, '{type_train}', {client_id}, " 
+        f"'{client_list}', {is_group}, {type_train_id}); "
+        
+        f"{text_is_complete if set_is_complete_true else ''}"
+        
+        f"COMMIT;")
     return execute_query(text_query)
 
 
@@ -131,4 +142,40 @@ def get_incom_all_month_balance():
                         "DATE_TRUNC('year', date) AS year " \
                  "FROM main.schedule GROUP BY month, year " \
                  "ORDER BY month ASC, year DESC"
+    return execute_query(text_query)
+
+
+def insert_in_accounting(client_id, summ, count_train, price_per_train, type_train_id):
+    text_query = ("INSERT INTO main.accounting "
+                  "(client_id,summ,count_train,updated_at,created_at,price_per_train,type_train_id) "
+                  f"VALUES ({client_id},{summ},{count_train},'now()','now()', {price_per_train}, {type_train_id}) "
+                  "RETURNING id;")
+    return execute_query(text_query)
+
+
+def get_active_prepaid_for_client(client_id, type_train_id):
+    text_query = ("SELECT x.* FROM main.accounting x "
+                  f"WHERE client_id = {client_id} and type_train_id = {type_train_id} and is_complete = False")
+    return execute_query(text_query)
+
+
+def get_count_prepaid_train(client_id, type_train_id):
+    text_query = ("SELECT a.count_train, count(s.client) "
+                  "FROM main.accounting a RIGHT JOIN main.schedule s "
+                  "ON a.client_id = s.client "
+                  f"WHERE s.client = {client_id} "
+                  "AND a.created_at <= s.add_time "
+                  "AND a.is_complete = False "
+                  f"AND s.type_train_id = {type_train_id} "
+                  "GROUP BY a.count_train")
+
+    return execute_query(text_query)
+
+
+def get_last_price_for_train(client_id, type_train_id):
+    text_query = ("SELECT * FROM main.schedule "
+                  f"WHERE client = {client_id} AND type_train_id = {type_train_id} "
+                  f"ORDER BY add_time DESC "
+                  f"LIMIT 4")
+
     return execute_query(text_query)
