@@ -1,7 +1,7 @@
 FROM python:3.11-alpine
 WORKDIR /usr/src/bot
 COPY bot.py config.ini sql.py requirements.txt test.py ./
-COPY src/ src/
+COPY src/ ./src/
 RUN \
     apk add --no-cache postgresql-libs && \
     apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev && \
