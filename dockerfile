@@ -1,6 +1,8 @@
-FROM python:3.9-alpine
+FROM python:3.11-alpine
 WORKDIR /usr/src/bot
 COPY bot.py config.ini sql.py requirements.txt test.py ./
+COPY src/ ./src/
+COPY src/Kate_Fit_Notes/ ./src/Kate_Fit_Notes
 RUN \
     apk add --no-cache postgresql-libs && \
     apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev && \
