@@ -1,10 +1,9 @@
-FROM python:3.11-alpine
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 WORKDIR /usr/src/bot
-COPY bot.py config.ini sql.py requirements.txt ./
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+COPY bot.py sql.py ./
 COPY src/ ./src/
-COPY src/Kate_Fit_Notes/ ./src/Kate_Fit_Notes
-RUN \
-    apk add --no-cache postgresql-libs && \
-    apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev && \
-    pip install --no-cache-dir -r requirements.txt
-CMD ["python3","-m", "bot.py"]
+ENV PATH="/usr/src/bot/.venv/bin:$PATH"
+CMD ["python3", "bot.py"]

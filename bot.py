@@ -1,15 +1,26 @@
-import configparser
+import logging
 import telebot
 import sql
 import datetime
 
 from telebot import types
+from src.Kate_Fit_Notes.domain import (
+    available_slots,
+    normalize_phone,
+    parse_prepaid,
+    parse_price,
+    price_per_train,
+    shift_week,
+    should_complete_prepaid,
+    time_choice_caption,
+    week_days,
+)
 from src.Kate_Fit_Notes.process_class import CurrentData
+from src.Kate_Fit_Notes.settings import load_settings
 
-config = configparser.ConfigParser()
-config.read("config.ini")
-token = config["main"]["TOKEN"]
-bot = telebot.TeleBot(token)
+logging.basicConfig(level=logging.INFO)
+_settings = load_settings()
+bot = telebot.TeleBot(_settings.telegram_token)
 allow_add_client = 0
 current_data = {}
 current_operation = None
@@ -58,15 +69,7 @@ def generator_inline(list_button):
 
 
 def validate_phone(message):
-    phone_number = message.contact.phone_number
-    if len(phone_number) == 12 and phone_number[0:2] == '+7':
-        return int(phone_number[2:])
-    elif len(phone_number) == 11:
-        if phone_number[0:1] == '7' or phone_number[0:1] == '8':
-            return int(phone_number[1:])
-    else:
-        bot.send_message(message.from_user.id, "Операция не выполнена! Не верный формат номера")
-        return 0
+    return normalize_phone(message.contact.phone_number)
 
 
 @bot.message_handler(commands=['button_return_to_start'])
@@ -248,9 +251,7 @@ def show_date(message, date=None):
     button_next_week = types.InlineKeyboardButton(f'неделя >>', callback_data=f'next_week')
     markup.add(button_prev_week, button_current_week, button_next_week)
 
-    weekday = date.isoweekday()
-    first_day_cur_week = date - datetime.timedelta(days=weekday - 1)
-    date_list = [first_day_cur_week + datetime.timedelta(days=d) for d in range(7)]
+    date_list = week_days(date)
     for i in range(7):
         dict_date[f'{i}'] = date_list[i]
     list_button = [types.InlineKeyboardButton(f'{date_list[i]:%d %a}',
@@ -262,15 +263,13 @@ def show_date(message, date=None):
 @bot.message_handler(commands=['show_time'])
 def show_available_time(message):
     current_data['operation'] = 'choose_time'
-    time_list = [datetime.time(i, 0) for i in range(work_hour['start'], work_hour['end'])]
-    list_not_available = sql.select_time_at_data(current_data['date'])
-    result = sorted(list(set(time_list) ^ set(list_not_available)))
+    result = available_slots(sql.select_time_at_data(current_data['date']))
     current_data['list_time'] = result
     list_button = [types.InlineKeyboardButton(f'{result[i]:%H:%M}',
                                               callback_data=f'{i}') for i in range(len(result))]
     markup = types.InlineKeyboardMarkup(row_width=3)
     markup.add(*list_button)
-    bot.send_message(message.chat.id, f'Выбор времени на дату: {current_data["operation"]}', reply_markup=markup)
+    bot.send_message(message.chat.id, time_choice_caption(current_data["date"]), reply_markup=markup)
 
 
 @bot.message_handler(content_types=['text', 'contact'])
@@ -279,21 +278,23 @@ def get_text_messages(message):
     if message.content_type == 'contact':
         if allow_add_client == 1:
             phone_number = validate_phone(message)
-            search_client = sql.search_client(phone_number)
-            if not phone_number:
-                bot.send_message(message.from_user.id, "Такой клиент уже существует в базе")
+            if phone_number is None:
+                bot.send_message(message.from_user.id, "Операция не выполнена! Не верный формат номера")
             else:
+                search_client = sql.search_client(phone_number)
                 if int(search_client[1]) == 0:
                     sql.insert_client_data(phone_number,
                                            message.contact.first_name,
                                            message.contact.last_name)
                     bot.send_message(message.from_user.id, "Ага, добавил")
+                else:
+                    bot.send_message(message.from_user.id, "Такой клиент уже существует в базе")
         else:
             bot.send_message(message.from_user.id, "Для добавления клиента нужно выбрать пункт <➕ Новый клиент>")
         allow_add_client = 0
     elif message.content_type == 'text':
         if message.text == '➕ Новый клиент':
-            print('OK')
+            logging.info("Выбран пункт «Новый клиент»")
             bot.send_message(message.from_user.id, "Отправь мне контакт и я добавлю его в клиенты")
             allow_add_client = 1
         elif message.text == '📓 Расписание тренировок':
@@ -339,8 +340,9 @@ def get_text_messages(message):
             show_list_client(message)
 
         elif current_data['operation'] == 'input_train_price':
-            if message.text.isdigit():
-                current_data['train_price'] = int(message.text)
+            parsed_price = parse_price(message.text)
+            if parsed_price is not None:
+                current_data['train_price'] = parsed_price
                 confirm_add(message)
             else:
                 bot.send_message(message.chat.id, 'Введено не корректное значение!')
@@ -349,10 +351,9 @@ def get_text_messages(message):
         match current_data_new.process, current_data_new.operation:
             case 'add_money_in_accounting', 'total_summ_and_number_train':
 
-                input_result = message.text.split(" ")
-                if len(input_result) == 2 and input_result[0].isdigit() and input_result[1].isdigit():
-                    current_data_new.summ = int(input_result[0])
-                    current_data_new.count_train = int(input_result[1])
+                prepaid = parse_prepaid(message.text)
+                if prepaid is not None:
+                    current_data_new.summ, current_data_new.count_train = prepaid
                     confirm_add_in_accounting(message)
                 else:
                     universal_text_input(
@@ -392,8 +393,10 @@ def confirm_add(message):
             if len(prepaid_train[2]) == 1:
 
                 current_data['set_is_complete_true'] = current_data['id_prepaid_row'][0] \
-                    if prepaid_train[2][0]['count_train'] - prepaid_train[2][0]['count'] == 1 \
-                    else False
+                    if should_complete_prepaid(
+                        prepaid_train[2][0]['count_train'],
+                        prepaid_train[2][0]['count'],
+                    ) else False
 
                 additonal_info = (f"\n!У клиента есть пред оплаченные тренировки: "
                                   f"{prepaid_train[2][0]['count_train'] - prepaid_train[2][0]['count']}\n шт!")
@@ -423,7 +426,7 @@ def confirm_add_in_accounting(message):
                      f"Тренировка: {current_data_new.train['type_train']}\n"
                      f"Общая сумма: {current_data_new.summ}\n"
                      f"Количество тренировок: {current_data_new.count_train}\n"
-                     f"Стоимость 1 тренировки: {current_data_new.summ / current_data_new.count_train}\n",
+                     f"Стоимость 1 тренировки: {price_per_train(current_data_new.summ, current_data_new.count_train)}\n",
                      parse_mode='Markdown', reply_markup=markup)
 
 
@@ -503,11 +506,15 @@ def callback_inline(call):
                                     client_id=current_data_new.client['client'],
                                     summ=current_data_new.summ,
                                     count_train=current_data_new.count_train,
-                                    price_per_train=current_data_new.summ / current_data_new.count_train,
+                                    price_per_train=price_per_train(
+                                        current_data_new.summ,
+                                        current_data_new.count_train,
+                                    ),
                                     type_train_id=current_data_new.train['id']
                                 )
                                 bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
-                            except:
+                            except Exception:
+                                logging.exception("Ошибка добавления предоплаты")
                                 bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
                         case 'cancel_add':
                             bot.send_message(call.message.chat.id, "Действие отменено!")
@@ -518,13 +525,13 @@ def callback_inline(call):
             if current_data['operation'] == 'choose_date':
                 if call.data == 'prev_week':
                     bot.delete_message(call.message.chat.id, call.message.id)
-                    show_date(call.message, dict_date['0'] - datetime.timedelta(days=7))
+                    show_date(call.message, shift_week(dict_date['0'], 'prev'))
                 elif call.data == 'current_week':
                     bot.delete_message(call.message.chat.id, call.message.id)
-                    show_date(call.message)
+                    show_date(call.message, shift_week(dict_date['0'], 'current'))
                 elif call.data == 'next_week':
                     bot.delete_message(call.message.chat.id, call.message.id)
-                    show_date(call.message, dict_date['0'] + datetime.timedelta(days=7))
+                    show_date(call.message, shift_week(dict_date['0'], 'next'))
                 elif len(call.data) == 1:
                     current_data['date'] = dict_date[call.data]
                     show_available_time(call.message)
@@ -569,7 +576,8 @@ def insert_data(message, date, client, client_list, time, rent_debt, type_train,
                                                 train_price, type_train_id, set_is_complete_true)
 
         bot.send_message(message.chat.id, "✅Запись добавлена!✅")
-    except:
+    except Exception:
+        logging.exception("Ошибка добавления записи в расписание")
         bot.send_message(message.chat.id, "❌ Ошибка добавления записи!❌")
 
 

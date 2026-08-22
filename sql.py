@@ -1,22 +1,25 @@
-import configparser
+import logging
 import psycopg2
 from psycopg2 import OperationalError
 import datetime
 import os
 
+from src.Kate_Fit_Notes.domain import ACCOUNTING_NOW_SQL
+from src.Kate_Fit_Notes.settings import load_settings
 
-config = configparser.ConfigParser()
-config.read("config.ini")
+logger = logging.getLogger(__name__)
 
+_settings = load_settings()
+db_ip = _settings.sql_host
 
-if config["sql"]["host"] == '':
+if db_ip == "":
     try:
-        db_ip = os.system("docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' pg_db")
-        print(f'Ip адрес базы данных:{db_ip}')
-    except:
-        print('Хост Бд не найден')
-else:
-    db_ip = config["sql"]["host"]
+        db_ip = os.system(
+            "docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' pg_db"
+        )
+        logger.warning("Хост БД пустой, docker inspect вернул код: %s", db_ip)
+    except Exception:
+        logger.exception("Хост Бд не найден")
 
 
 def execute_query(text_query):
@@ -24,8 +27,7 @@ def execute_query(text_query):
     connection.autocommit = True
     cursor = connection.cursor()
     cursor.execute(text_query)
-    print(f'[{datetime.datetime.now()}]Запрос с текстом <<{cursor.query}>> '
-          f'выполнен с результатом <<{cursor.statusmessage}>>')
+    logger.info("SQL %s", cursor.statusmessage)
     result_query = cursor.statusmessage.split(' ')
     if result_query[0] == 'SELECT':
         array_data = cursor.fetchall()
@@ -43,15 +45,15 @@ def create_connection():
     connection = None
     try:
         connection = psycopg2.connect(
-            database=config["sql"]["database"],
-            user=os.environ['TG_ACCOUNT'],
-            password=os.environ['TG_PASS'],
+            database=_settings.sql_database,
+            user=_settings.sql_user,
+            password=_settings.sql_password,
             host=db_ip,
-            port=config["sql"]["port"],
+            port=_settings.sql_port,
         )
-        print(f"[{datetime.datetime.now()}]Подключение к базе данных PostgreSQL прошло успешно")
-    except OperationalError as e:
-        print(f"[{datetime.datetime.now()}]Произошла ошибка '{e}'")
+        logger.info("Подключение к базе данных PostgreSQL прошло успешно")
+    except OperationalError:
+        logger.exception("Ошибка подключения к PostgreSQL")
     return connection
 
 
@@ -148,7 +150,7 @@ def get_incom_all_month_balance():
 def insert_in_accounting(client_id, summ, count_train, price_per_train, type_train_id):
     text_query = ("INSERT INTO main.accounting "
                   "(client_id,summ,count_train,updated_at,created_at,price_per_train,type_train_id) "
-                  f"VALUES ({client_id},{summ},{count_train},'now()','now()', {price_per_train}, {type_train_id}) "
+                  f"VALUES ({client_id},{summ},{count_train},{ACCOUNTING_NOW_SQL},{ACCOUNTING_NOW_SQL}, {price_per_train}, {type_train_id}) "
                   "RETURNING id;")
     return execute_query(text_query)
 

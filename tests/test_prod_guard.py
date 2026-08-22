@@ -39,3 +39,22 @@ def test_missing_url_is_empty(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
     assert get_database_url() is None
+
+
+def test_runner_does_not_default_to_prod_url(monkeypatch):
+    """Без DATABASE_URL pytest не подставляет Kate_fitness:5432."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+    url = get_database_url()
+    assert url is None
+    assert url != "postgresql://root:root@localhost:5432/Kate_fitness"
+
+
+def test_pytest_config_does_not_set_database_url():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    pytest_ini = (root / "pytest.ini").read_text(encoding="utf-8")
+    assert "DATABASE_URL" not in pyproject
+    assert "DATABASE_URL" not in pytest_ini

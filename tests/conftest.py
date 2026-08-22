@@ -1,6 +1,6 @@
 """Фикстуры тестовой БД: DATABASE_URL, миграции Alembic, truncate, фабрики.
 
-Не импортирует bot.py и sql.py — они читают config.ini и прод-параметры.
+Не импортирует bot.py и sql.py — они вызывают load_settings() и ждут токен / SQL.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _admin_url(url: str) -> str:
 
 
 def _create_database_if_missing(url: str, dbname: str) -> None:
-    """Контейнер pg_db_test из-за POSTGRESS_DB поднимает дефолтную БД postgres."""
+    """Если том уже инициализирован без POSTGRES_DB, создаём Kate_fitness_test вручную."""
     admin = psycopg2.connect(_admin_url(url))
     admin.autocommit = True
     try:

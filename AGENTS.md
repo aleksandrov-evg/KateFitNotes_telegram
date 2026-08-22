@@ -8,10 +8,10 @@
 
 ## Стек
 
-- Python 3.11
+- Python 3.14, менеджер пакетов [uv](https://docs.astral.sh/uv/)
 - [pyTelegramBotAPI](https://github.com/eternnoir/pyTelegramBotAPI) 4.7.1 (`telebot`)
-- PostgreSQL 14 (`psycopg2` 2.9.5)
-- Docker Compose (`postgres:14-alpine`, `dpage/pgadmin4`, образ бота)
+- PostgreSQL 14 (`psycopg2-binary` 2.9.12, импорт `psycopg2`)
+- Docker Compose (`postgres:14-alpine`, `dpage/pgadmin4`, образ бота на `uv` + Python 3.14)
 
 Точка входа: `bot.py` → `bot.infinity_polling()`. `main.py` — заглушка PyCharm, бот её не использует.
 
@@ -20,6 +20,7 @@
 ```
 bot.py                          # хендлеры, меню, callback-сценарии, глобальное состояние
 sql.py                          # все SQL-запросы к PostgreSQL
+src/Kate_Fit_Notes/settings.py        # конфиг: env, fallback config.ini
 src/Kate_Fit_Notes/process_class.py   # класс CurrentData (состояние сценария оплаты)
 src/Kate_Fit_Notes/pipelines.py       # пустой файл, не использовать
 tests/                          # автотесты (pytest), не корневой test.py
@@ -28,14 +29,17 @@ backups/kate_fitness_schema.sql # DDL Kate_fitness без данных (клас
 dockerfile                      # образ бота
 docker-compose.yml              # pg_db :5432, pg_db_test :5433, pgadmin :5050, tg_bot
 config.ini                      # не в git: TOKEN и параметры SQL
-requirements.txt                # runtime
-requirements-dev.txt            # pytest, alembic
+pyproject.toml                  # runtime и dev-зависимости
+uv.lock                         # зафиксированные версии
+.python-version                 # 3.14
 .env.example                    # шаблон env без секретов
 ```
 
-Не коммитить: `config.ini`, `.env`, `pg_db/`, `pg_db_test/`, `pgadmin/`, секреты.
+Не коммитить: `config.ini`, `.env`, `pg_db/`, `pg_db_test/`, `pgadmin/`, `.idea/`, секреты.
 
 ## Конфигурация
+
+Один источник: **env**. Локальный `config.ini` — fallback, если переменной нет. Env побеждает ini. Файл ini не обязателен, если env полный. Загрузка: `src/Kate_Fit_Notes/settings.py` (`load_settings`).
 
 `config.ini` (локальный, в `.gitignore`):
 
@@ -55,16 +59,20 @@ port=5432
 
 Переменные окружения (`.env` / compose):
 
-| Переменная     | Назначение                                      |
-|----------------|-------------------------------------------------|
-| `TG_ACCOUNT`   | пользователь PostgreSQL (`POSTGRES_USER`)       |
-| `TG_PASS`      | пароль PostgreSQL и pgAdmin                     |
-| `TG_EMAIL`     | логин pgAdmin (`PGADMIN_DEFAULT_EMAIL`)         |
-| `DATABASE_URL` | URL тестовой БД для pytest / Alembic (порт 5433, имя `*_test`) |
+| Переменная | Назначение | Fallback ini |
+|------------|------------|--------------|
+| `TG_TOKEN` | токен Telegram-бота | `[main] TOKEN` |
+| `TG_ACCOUNT` | пользователь PostgreSQL (`POSTGRES_USER`) | `[sql] user` |
+| `TG_PASS` | пароль PostgreSQL и pgAdmin | `[sql] password` |
+| `TG_EMAIL` | логин pgAdmin (`PGADMIN_DEFAULT_EMAIL`) | — |
+| `SQL_DATABASE` | имя БД бота | `[sql] database` |
+| `SQL_HOST` | хост БД бота | `[sql] host` |
+| `SQL_PORT` | порт БД бота | `[sql] port` |
+| `DATABASE_URL` | URL тестовой БД для pytest / Alembic (порт 5433, имя `*_test`) | — |
 
-Подключение к БД в `sql.py` берёт `user`/`password` из `os.environ['TG_ACCOUNT']` / `os.environ['TG_PASS']`, а `database`/`host`/`port` — из `config.ini`.
+В compose у `tg_bot` задаются `SQL_HOST=db_pg`, `SQL_PORT=5432`, `SQL_DATABASE=Kate_fitness`. Postgres: `POSTGRES_DB=Kate_fitness` (прод) и `Kate_fitness_test` (тест), healthcheck `pg_isready`, бот ждёт `service_healthy`.
 
-Тестовая БД: контейнер `pg_db_test`, порт хоста `5433`, имя `Kate_fitness_test` (`DATABASE_URL`). Pytest отказывается подключаться к `Kate_fitness` и к порту `5432`.
+Тестовая БД: контейнер `pg_db_test`, порт хоста `5433`, имя `Kate_fitness_test` (`DATABASE_URL`). Pytest отказывается подключаться к `Kate_fitness` и к порту `5432`. Pytest **не** подхватывает `.env` сам — `DATABASE_URL` нужно экспортировать.
 
 ## База данных
 
@@ -134,7 +142,7 @@ port=5432
 
 ## SQL-слой (`sql.py`)
 
-- `execute_query(text)` открывает соединение, `autocommit=True`, печатает лог.
+- `execute_query(text)` открывает соединение, `autocommit=True`, пишет в `logging` только `statusmessage` (не полный SQL с телефонами).
 - Для `SELECT` возвращает список вида `['SELECT', '<n>', list[dict]]`. Код бота читает `result[1]` (число строк) и `result[2]` (строки). Для `INSERT`/`UPDATE` возвращается `None` — это учитывают хендлеры.
 - Запросы собираются f-строками с подстановкой значений. **Не добавлять пользовательский ввод в SQL без санитизации**; новые запросы лучше писать с плейсхолдерами `%s` / `cursor.execute(sql, params)`.
 - Не переписывать все существующие запросы на параметризацию в рамках мелкой задачи.
@@ -149,34 +157,34 @@ port=5432
 
 ## Как запускать
 
-Локально (нужны `config.ini` и env `TG_ACCOUNT`/`TG_PASS`):
+Локально (env `TG_TOKEN` / `TG_ACCOUNT` / `TG_PASS` / `SQL_*` или fallback `config.ini`):
 
 ```bash
-python3 bot.py
+uv sync
+uv run python bot.py
 ```
 
 Инфраструктура:
 
 ```bash
 docker compose up -d db_pg pgadmin
-# образ бота: docker build -t telegram_bot:latest .
+docker compose build tg_bot
+# или: docker build -t telegram_bot:latest .
 docker compose up -d tg_bot
 ```
 
 pgAdmin: `http://localhost:5050`. Postgres: `localhost:5432` (прод-данные), `localhost:5433` (тест).
 
-В `dockerfile` команда `CMD ["python3","-m", "bot.py"]` некорректна для запуска модуля; рабочий вариант — `python3 bot.py`. Не «чинить» это попутно, если задача не про Docker.
-
 Тесты (нужны `DATABASE_URL` на `localhost:5433` / `Kate_fitness_test`, не прод):
 
 ```bash
-pip install -r requirements-dev.txt
+uv sync
 docker compose up -d db_pg_test
 # DATABASE_URL как в .env.example
-pytest tests/
+uv run pytest tests/
 ```
 
-Без `DATABASE_URL` DB-тесты скипаются. Не импортировать `bot.py` в тестах: он читает токен из `config.ini`.
+Без `DATABASE_URL` DB-тесты скипаются. Живой Telegram-токен для `pytest tests/` не нужен. Не импортировать `bot.py` / `sql.py` в тестах: они вызывают `load_settings()` при импорте.
 
 ## Соглашения по коду
 
