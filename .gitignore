@@ -1,6 +1,11 @@
 /config.ini
 /pg_db/
+/pg_db_test/
 /pgadmin/
-/test.py
 /Архив_данных_17.04.rar
+/backups/cluster_*.sql
 /.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
