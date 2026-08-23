@@ -14,7 +14,11 @@ class SlotTakenError(ValueError):
 
 
 class InvalidTrainTypeError(ValueError):
-    """Тип тренировки не подходит для персональной записи."""
+    """Тип тренировки не подходит для сценария записи."""
+
+
+class EmptyParticipantsError(ValueError):
+    """В групповую запись не передали ни одного участника."""
 
 
 class MultiplePrepaidError(ValueError):

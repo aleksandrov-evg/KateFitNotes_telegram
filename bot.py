@@ -17,6 +17,7 @@ from src.Kate_Fit_Notes.services.booking import BookingService
 from src.Kate_Fit_Notes.services.clients import ClientService
 from src.Kate_Fit_Notes.services.errors import (
     DuplicateClientError,
+    EmptyParticipantsError,
     InvalidPhoneError,
     MultiplePrepaidError,
     SlotTakenError,
@@ -449,7 +450,12 @@ def callback_inline(call):
                 if call.data == 'confirm_multi_list_client':
                     current_data['client_multi'] = [(i['client'], f'{i["name"]} {i["surname"]}')
                                                     for i in current_data['list_multi_select'] if i['select']]
-                    current_data['process'] = None
+                    if not current_data['client_multi']:
+                        bot.send_message(
+                            call.message.chat.id,
+                            "Нужно выбрать хотя бы одного клиента",
+                        )
+                        return
                     show_date(call.message)
                 elif call.data == 'show_all_client_multi':
                     bot.delete_message(call.message.chat.id, call.message.id)
@@ -547,26 +553,22 @@ def callback_inline(call):
                             logging.exception("Ошибка добавления записи в расписание")
                             bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
                     else:
-                        if current_data['client_multi'] is None:
-                            current_data['client_multi'] = [current_data['client']]
-                        elif current_data['client'] is None:
-                            current_data['client'] = [i for i in current_data]
-                        if current_data['client_multi'] is None:
-                            current_data['client_multi'] = [x['client'] for x in current_data['list_multi_select'] if
-                                                            x['select']]
-
-                        insert_data(message=call.message,
-                                    date=current_data['date'],
-                                    client=current_data['client']['client'],
-                                    client_list=f"{{{','.join([str(i[0]) for i in current_data['client_multi']])}}}",
-                                    is_group=current_data['is_group'],
-                                    time=current_data['time'],
-                                    rent_debt=current_data['train']['rent_debt'],
-                                    type_train=current_data['train']['type_train'],
-                                    train_price=current_data['train_price'],
-                                    type_train_id=current_data['train']['id'],
-                                    set_is_complete_true=current_data['set_is_complete_true']
-                                    )
+                        try:
+                            booking_service.book_group(
+                                client_ids=[i[0] for i in current_data.get('client_multi') or []],
+                                type_train_id=current_data['train']['id'],
+                                session_date=current_data['date'],
+                                session_time=current_data['time'],
+                                price=current_data['train_price'],
+                            )
+                            bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
+                        except SlotTakenError:
+                            bot.send_message(call.message.chat.id, "❌ Слот уже занят!❌")
+                        except EmptyParticipantsError:
+                            bot.send_message(call.message.chat.id, "❌ Нужно выбрать хотя бы одного клиента!❌")
+                        except Exception:
+                            logging.exception("Ошибка добавления групповой записи в расписание")
+                            bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")
                 elif call.data == 'cancel_add':
                     bot.send_message(call.message.chat.id, "Действие отменено!")
                     start(call.message)

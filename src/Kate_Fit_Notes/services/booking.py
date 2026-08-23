@@ -1,4 +1,4 @@
-"""Сценарии записи: персональный слот, свободные часы, цена с предоплаты. Без Telegram."""
+"""Сценарии записи: персональный и групповой слот, свободные часы, цена. Без Telegram."""
 
 from __future__ import annotations
 
@@ -7,9 +7,16 @@ from typing import Any
 
 from psycopg2.errors import UniqueViolation
 
-from src.Kate_Fit_Notes.domain import available_slots, should_complete_prepaid
+from src.Kate_Fit_Notes.domain import (
+    GROUP_CLIENT_ID,
+    available_slots,
+    format_client_list,
+    parse_client_list,
+    should_complete_prepaid,
+)
 from src.Kate_Fit_Notes.repository import KateFitRepository
 from src.Kate_Fit_Notes.services.errors import (
+    EmptyParticipantsError,
     InvalidTrainTypeError,
     MultiplePrepaidError,
     SlotTakenError,
@@ -20,10 +27,6 @@ from src.Kate_Fit_Notes.services.errors import (
 class PersonalPriceHint:
     last_prices: list[dict] = field(default_factory=list)
     prepaid_price: Any = None
-
-
-def _personal_client_list(client_id: Any) -> str:
-    return f"{{{client_id}}}"
 
 
 def _used_count(row: dict) -> int:
@@ -86,7 +89,7 @@ class BookingService:
             self._repo.insert_in_schedule(
                 session_date,
                 client_id,
-                _personal_client_list(client_id),
+                format_client_list([client_id]),
                 session_time,
                 train.get("rent_debt"),
                 train.get("type_train"),
@@ -115,3 +118,50 @@ class BookingService:
         if should_complete_prepaid(count_train, used):
             return prepaid_row["id"]
         return False
+
+    def book_group(
+        self,
+        client_ids: Any,
+        type_train_id: Any,
+        session_date: Any,
+        session_time: Any,
+        price: Any = None,
+    ) -> dict:
+        if not client_ids:
+            raise EmptyParticipantsError("нужен хотя бы один участник")
+
+        train = self._repo.get_train(type_train_id)
+        if train is None or not train.get("group_train"):
+            raise InvalidTrainTypeError("нужен групповой тип тренировки")
+
+        occupied = self._repo.select_time_at_data(session_date)
+        if session_time in occupied:
+            raise SlotTakenError("слот уже занят")
+
+        client_list = format_client_list(client_ids)
+        try:
+            self._repo.insert_in_schedule(
+                session_date,
+                GROUP_CLIENT_ID,
+                client_list,
+                session_time,
+                train.get("rent_debt"),
+                train.get("type_train"),
+                True,
+                price,
+                type_train_id,
+                False,
+            )
+        except UniqueViolation as exc:
+            raise SlotTakenError("слот уже занят") from exc
+
+        row = self._repo.get_schedule_at(session_date, session_time)
+        participants = parse_client_list(row["client_list"] if row else client_list)
+        return {
+            "client": GROUP_CLIENT_ID,
+            "participants": participants,
+            "date": session_date,
+            "time": session_time,
+            "price": price,
+            "type_train_id": type_train_id,
+        }

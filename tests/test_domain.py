@@ -7,9 +7,12 @@ import pytest
 
 from src.Kate_Fit_Notes.domain import (
     ACCOUNTING_NOW_SQL,
+    GROUP_CLIENT_ID,
     available_slots,
+    format_client_list,
     new_client_phone_status,
     normalize_phone,
+    parse_client_list,
     parse_prepaid,
     parse_price,
     price_per_train,
@@ -163,3 +166,22 @@ class TestAccountingNowSql:
         ).read_text(encoding="utf-8")
         assert "'now()'" not in source
         assert "ACCOUNTING_NOW_SQL" in source
+
+
+class TestClientListFormat:
+    def test_format_ids_as_braces(self):
+        assert format_client_list([9001112233, 9001112234]) == "{9001112233,9001112234}"
+        assert format_client_list([]) == "{}"
+        assert format_client_list(None) == "{}"
+
+    def test_parse_braces_string(self):
+        assert parse_client_list("{9001112233,9001112234}") == [9001112233, 9001112234]
+        assert parse_client_list("{}") == []
+        assert parse_client_list(None) == []
+
+    def test_parse_postgres_array(self):
+        assert parse_client_list([9001112233, 9001112234]) == [9001112233, 9001112234]
+        assert parse_client_list((9001112233,)) == [9001112233]
+
+    def test_group_client_id_is_minus_one(self):
+        assert GROUP_CLIENT_ID == -1

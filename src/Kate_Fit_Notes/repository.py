@@ -32,6 +32,8 @@ class KateFitRepository(Protocol):
 
     def select_time_at_data(self, date: Any) -> list: ...
 
+    def get_schedule_at(self, date: Any, time: Any) -> dict | None: ...
+
     def insert_in_schedule(
         self,
         date: Any,
@@ -157,6 +159,13 @@ class PostgresRepository:
             (date,),
         )
         return [row["time"] for row in rows]
+
+    def get_schedule_at(self, date: Any, time: Any) -> dict | None:
+        rows = self._fetch_all(
+            "SELECT * FROM main.schedule WHERE date = %s AND time = %s",
+            (date, time),
+        )
+        return rows[0] if rows else None
 
     def insert_in_schedule(
         self,
