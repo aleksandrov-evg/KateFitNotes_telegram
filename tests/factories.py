@@ -1,6 +1,6 @@
 """Фабрики строк для тестов. Параметризованный SQL, без sql.py."""
 
-from datetime import date, time
+from datetime import date, datetime, time
 
 
 def make_client(conn, phone=9001112233, name="Тест", surname="Клиентов", add_time=None):
@@ -72,4 +72,45 @@ def make_schedule(
         "client": client,
         "date": session_date,
         "time": session_time,
+    }
+
+
+def make_accounting(
+    conn,
+    client_id,
+    type_train_id,
+    summ=10000,
+    count_train=10,
+    price_per_train=1000,
+    is_complete=False,
+    created_at=None,
+):
+    created = created_at or datetime(2020, 1, 1)
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO main.accounting "
+            "(client_id, summ, count_train, price_per_train, type_train_id, "
+            "is_complete, created_at, updated_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (
+                client_id,
+                summ,
+                count_train,
+                price_per_train,
+                type_train_id,
+                is_complete,
+                created,
+                created,
+            ),
+        )
+        row = cur.fetchone()
+    conn.commit()
+    return {
+        "id": row[0],
+        "client_id": client_id,
+        "type_train_id": type_train_id,
+        "summ": summ,
+        "count_train": count_train,
+        "price_per_train": price_per_train,
+        "is_complete": is_complete,
     }

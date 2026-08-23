@@ -111,3 +111,11 @@ def make_schedule(db_conn):
         return factories.make_schedule(db_conn, **kwargs)
 
     return _make
+
+
+@pytest.fixture
+def make_accounting(db_conn):
+    def _make(**kwargs):
+        return factories.make_accounting(db_conn, **kwargs)
+
+    return _make

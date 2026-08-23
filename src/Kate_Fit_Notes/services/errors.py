@@ -7,3 +7,20 @@ class InvalidPhoneError(ValueError):
 
 class DuplicateClientError(ValueError):
     """Клиент с таким телефоном уже есть (PK phone)."""
+
+
+class SlotTakenError(ValueError):
+    """Дата и время уже заняты в расписании."""
+
+
+class InvalidTrainTypeError(ValueError):
+    """Тип тренировки не подходит для персональной записи."""
+
+
+class MultiplePrepaidError(ValueError):
+    """У клиента больше одного незакрытого пакета предоплаты."""
+
+    def __init__(self, count: int, ids: list):
+        self.count = count
+        self.ids = ids
+        super().__init__(f"у клиента {count} незакрытых предоплат")

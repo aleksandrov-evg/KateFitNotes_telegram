@@ -28,6 +28,8 @@ class KateFitRepository(Protocol):
 
     def list_all_train(self, group: bool) -> list[dict]: ...
 
+    def get_train(self, train_id: Any) -> dict | None: ...
+
     def select_time_at_data(self, date: Any) -> list: ...
 
     def insert_in_schedule(
@@ -141,6 +143,13 @@ class PostgresRepository:
             "SELECT * FROM main.trains WHERE group_train = %s",
             (group,),
         )
+
+    def get_train(self, train_id: Any) -> dict | None:
+        rows = self._fetch_all(
+            "SELECT * FROM main.trains WHERE id = %s",
+            (train_id,),
+        )
+        return rows[0] if rows else None
 
     def select_time_at_data(self, date: Any) -> list:
         rows = self._fetch_all(
