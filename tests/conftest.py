@@ -1,6 +1,7 @@
 """Фикстуры тестовой БД: DATABASE_URL, миграции Alembic, truncate, фабрики.
 
-Не импортирует bot.py и sql.py — они вызывают load_settings() и ждут токен / SQL.
+Не импортирует bot.py и sql.py. Тесты адаптера (tests/test_bot.py) импортируют bot
+после этапа 10: import не вызывает load_settings и не стартует polling.
 """
 
 from __future__ import annotations

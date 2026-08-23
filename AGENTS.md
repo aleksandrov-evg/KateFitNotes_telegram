@@ -13,17 +13,18 @@
 - PostgreSQL 14 (`psycopg2-binary` 2.9.12, импорт `psycopg2`)
 - Docker Compose (`postgres:14-alpine`, `dpage/pgadmin4`, образ бота на `uv` + Python 3.14)
 
-Точка входа: `bot.py` → `bot.infinity_polling()`. `main.py` — заглушка PyCharm, бот её не использует.
+Точка входа: `uv run python bot.py` → `create_bot(...).bot.infinity_polling()` под `if __name__ == "__main__"`. `import bot` не стартует polling и не вызывает `load_settings()`. `main.py` — заглушка PyCharm, бот её не использует.
 
 ## Карта файлов
 
 ```
-bot.py                          # хендлеры, меню, callback-сценарии; состояние через SessionStore
+bot.py                          # тонкий адаптер: create_bot, хендлеры без SQL
 sql.py                          # тонкие обёртки над PostgresRepository
 src/Kate_Fit_Notes/settings.py        # конфиг: env, fallback config.ini
 src/Kate_Fit_Notes/db.py              # пул соединений PostgreSQL
 src/Kate_Fit_Notes/repository.py      # параметризованные запросы, list[dict]
 src/Kate_Fit_Notes/session.py         # ScenarioState + SessionStore по chat_id
+src/Kate_Fit_Notes/bot_ui.py          # клавиатуры и тексты (markup без send_message)
 src/Kate_Fit_Notes/pipelines.py       # пустой файл, не использовать
 tests/                          # автотесты (pytest), не корневой test.py
 alembic/                        # миграции схемы main.* as-is
@@ -91,7 +92,7 @@ port=5432
 
 Таблицы `main.payment` в проде нет. Идентификатор клиента — **телефон** (`phone`). `client_list` в БД — массив `bigint[]` (бот по-прежнему шлёт строку `{1,2,3}`).
 
-Рабочие часы слотов: 07:00–23:00 (`work_hour` в `bot.py`). Занятые слоты на дату = `SELECT time FROM main.schedule WHERE date = ...`.
+Рабочие часы слотов: 07:00–23:00 (`domain.work_slots`). Занятые слоты на дату = `SELECT time FROM main.schedule WHERE date = ...`.
 
 ## Сценарии бота
 
@@ -114,7 +115,7 @@ port=5432
 3. Дата (неделя, `<< неделя` / `Эта неделя` / `неделя >>`)
 4. Свободное время
 5. Цена (если есть незакрытая предоплата — подсказка / блок при >1 авансе)
-6. Подтверждение → `sql.insert_in_schedule`; при последней предоплаченной тренировке выставляется `accounting.is_complete = true`
+6. Подтверждение → `BookingService.book_personal`; при последней предоплаченной тренировке выставляется `accounting.is_complete = true`
 
 ### Групповая тренировка (`process = add_multi_train_in_schedule`)
 
@@ -127,15 +128,15 @@ port=5432
 
 1. Клиент → тип тренировки
 2. Текст: `<сумма> <количество>`, например `1000 10`
-3. Подтверждение → `sql.insert_in_accounting`
+3. Подтверждение → `PrepaidService.add_package`
 
 ## Состояние: `SessionStore` по `chat_id`
 
-Один объект `ScenarioState` на чат (`src/Kate_Fit_Notes/session.py`). Запись и оплата — поля того же объекта, разные `process`. Модульный `sessions` в `bot.py`; хендлеры берут `sessions.get(message.chat.id)`.
+Один объект `ScenarioState` на чат (`src/Kate_Fit_Notes/session.py`). Запись и оплата — поля того же объекта, разные `process`. `create_bot` держит `SessionStore`; хендлеры берут `sessions.get(message.chat.id)`.
 
 Поля процесса: `process` (pipeline), `operation` (шаг). Callback'и смотрят на пару `(process, operation)` и на `call.data`.
 
-`call.data` часто — **индекс в текущем списке** (`list_client`, `list_train`, `list_time`), а не id из БД. Для мультивыбора клиента `callback_data` = `phone`. Не менять формат callback без проверки всех `match`/`if` в `callback_inline`.
+`callback_data` — id сущности: телефон клиента, `trains.id`, ISO-дата, время `HH:MM`. Служебные кнопки (`show_all_client_single`, `approve_add`, `prev_week`, …) — строки. Если id нет в текущем `list_*` (устаревшая кнопка) — выход без записи, без IndexError.
 
 Сброс: `sessions.clear(chat_id)` при `/start` и «В главное меню»; при входе в персональную/групповую запись и «Добавить оплату» — `clear(chat_id, process=...)`. Сброс затрагивает только этот чат.
 
@@ -145,7 +146,7 @@ port=5432
 - `sql.py` — тонкие обёртки с прежними именами функций; при импорте вызывает `load_settings()`.
 - Выборки возвращают `list[dict]`; пустой список — нет строк. Число строк — `len(rows)`, не `result[1]` / `result[2]`. `select_time_at_data` — список времён. INSERT/UPDATE — `None`.
 - Запросы с плейсхолдерами `%s` / `cursor.execute(sql, params)`. Логируется только `statusmessage`, не полный SQL с телефонами.
-- Тесты репозитория импортируют `repository` / `db` и собирают его из `DATABASE_URL`. Не импортировать `bot.py` / `sql.py`.
+- Тесты репозитория и сервисов импортируют `repository` / `db` и собирают его из `DATABASE_URL`. Не импортировать `sql.py`. `bot.py` можно импортировать в `tests/test_bot.py` (`create_bot` с фейковым репо).
 
 Типичные функции:
 
@@ -184,7 +185,7 @@ docker compose up -d db_pg_test
 uv run pytest tests/
 ```
 
-Без `DATABASE_URL` DB-тесты скипаются. Живой Telegram-токен для `pytest tests/` не нужен. Не импортировать `bot.py` / `sql.py` в тестах: они вызывают `load_settings()` при импорте. Тесты репозитория: `PostgresRepository.from_dsn(DATABASE_URL)`.
+Без `DATABASE_URL` DB-тесты скипаются. Живой Telegram-токен для `pytest tests/` не нужен: `import bot` не вызывает `load_settings()`. Остальные тесты не импортируют `sql.py`. Тесты репозитория: `PostgresRepository.from_dsn(DATABASE_URL)`. Тесты адаптера: `create_bot(settings, fake_repo)` в `tests/test_bot.py`.
 
 ## Соглашения по коду
 
@@ -211,7 +212,7 @@ uv run pytest tests/
 
 | Задача | Куда смотреть |
 |--------|----------------|
-| Новый пункт меню | `start()`, ветка в `get_text_messages()` |
-| Новый шаг сценария | функции `show_*` + ветка в `callback_inline` |
-| Новая выборка/запись | метод в `repository.py`, обёртка в `sql.py`, вызов из `bot.py` |
+| Новый пункт меню | `BotApp.start` / `get_text_messages`, тексты в `bot_ui.py` |
+| Новый шаг сценария | методы `show_*` + ветка в `callback_inline` |
+| Новая выборка/запись | метод в `repository.py` и сервисе; хендлер только вызывает сервис |
 | Поля состояния сценария | `ScenarioState` / `SessionStore` в `session.py` |

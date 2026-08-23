@@ -33,6 +33,9 @@ class BookingService:
         self._repo = repo
         self._prepaid = PrepaidService(repo)
 
+    def list_train_types(self, group: bool) -> list[dict]:
+        return self._repo.list_all_train(group)
+
     def list_available_slots(self, session_date: Any) -> list:
         return available_slots(self._repo.select_time_at_data(session_date))
 

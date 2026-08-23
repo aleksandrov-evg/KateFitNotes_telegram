@@ -54,6 +54,13 @@ class FakeBookingRepo:
     def get_train(self, train_id):
         return self.trains.get(train_id)
 
+    def list_all_train(self, group):
+        return [
+            dict(row)
+            for row in self.trains.values()
+            if bool(row.get("group_train")) is bool(group)
+        ]
+
     def select_time_at_data(self, session_date):
         return list(self.occupied.get(session_date, []))
 
@@ -229,6 +236,15 @@ class TestAvailableSlotsUnit:
         slots = BookingService(fake).list_available_slots(SESSION_DATE)
         assert time(10, 0) not in slots
         assert time(9, 0) in slots
+
+
+class TestListTrainTypesUnit:
+    def test_personal_and_group_filtered(self):
+        fake = FakeBookingRepo()
+        personal = BookingService(fake).list_train_types(False)
+        group = BookingService(fake).list_train_types(True)
+        assert [row["id"] for row in personal] == [PERSONAL_TRAIN_ID]
+        assert [row["id"] for row in group] == [GROUP_TRAIN_ID]
 
 
 class TestBookPersonalIntegration:
