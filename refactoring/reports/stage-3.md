@@ -6,7 +6,7 @@
 - [x] Вердикт MERGE — этап можно закрывать
 
 **Команда:** `pytest tests/`
-**Результат прогона:** 67 passed / 0 failed (с `DATABASE_URL` на `localhost:5433/Kate_fitness_test`)
+**Результат прогона:** 57 passed / 0 failed / 10 skipped (скип — DB-тесты без `DATABASE_URL`: 6 смоуков этапа 0 + 4 репозитория)
 **Вердикт ревьювера:** MERGE
-**Саммари:** SQL-слой вынесен в `PostgresRepository` с пулом соединений: запросы сценариев бота параметризованы `%s`, результат — `list[dict]`, `bot.py` больше не читает `result[1]`/`result[2]`. `docker inspect` убран, пустой `SQL_HOST` — `ConfigError`. Покрыты поиск клиента, INSERT с апострофом, возврат соединения в пул и негатив «payload в params, не в SQL». Блокеров нет.
+**Саммари:** SQL-слой вынесен в `PostgresRepository` с пулом соединений: запросы сценариев бота параметризованы `%s`, результат — `list[dict]`, `bot.py` больше не читает `result[1]`/`result[2]`. `docker inspect` убран, пустой `SQL_HOST` — `ConfigError`. Юниты покрывают возврат соединения в пул и негатив «payload в params, не в SQL». Поиск клиента и INSERT с апострофом есть в `tests/test_repository.py` и скипются без `DATABASE_URL`, как остальные DB-смоуки. Блокеров нет.
 **Дата:** 23.08.2026

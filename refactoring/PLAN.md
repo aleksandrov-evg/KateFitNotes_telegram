@@ -312,8 +312,8 @@
 
 ```
 Вердикт: MERGE
-Что сделано: PostgresRepository + Protocol KateFitRepository; пул ThreadedConnectionPool с with/putconn. Запросы сценариев бота на %s. sql.py — тонкие обёртки, list[dict], без result[1]/[2] и docker inspect. Пустой SQL_HOST — ConfigError. insert_in_schedule — транзакция, не BEGIN/COMMIT строкой. tests/test_repository.py: поиск, апостроф, пул, мок SQL. pytest tests/ — 67 passed.
-Риски: пул создаётся при импорте sql.py (нужна живая БД). used_count смотрит на _pool._used. Нет интеграционных тестов insert_in_schedule / accounting (не требовались чекбоксами). import bot.py/sql.py по-прежнему нужен полный конфиг (этап 10).
+Что сделано: PostgresRepository + Protocol KateFitRepository; пул ThreadedConnectionPool с with/putconn. Запросы сценариев бота на %s. sql.py — тонкие обёртки, list[dict], без result[1]/[2] и docker inspect. Пустой SQL_HOST — ConfigError. insert_in_schedule — транзакция, не BEGIN/COMMIT строкой. tests/test_repository.py: поиск, апостроф, пул, мок SQL.
+Риски: пул создаётся при импорте sql.py (нужна живая БД). used_count смотрит на _pool._used. DB-тесты репозитория (поиск/апостроф/утечка пула) скипаются без DATABASE_URL — как смоуки этапа 0. Нет интеграционных тестов insert_in_schedule / accounting (не требовались чекбоксами). import bot.py/sql.py по-прежнему нужен полный конфиг (этап 10).
 Блокеры: нет
 ```
 
@@ -324,7 +324,7 @@
 - [x] Код-ревью проведено
 - [x] Можно мержить
 
-**Прогон:** `pytest tests/` — 67 passed (с `DATABASE_URL` на `*:5433/Kate_fitness_test`)  
+**Прогон:** `pytest tests/` — 57 passed / 10 skipped (скип — DB без `DATABASE_URL`: 6 смоуков этапа 0 + 4 репозитория)  
 **Вердикт:** MERGE  
 **Саммари:** Репозиторий параметризован, соединения возвращаются в пул, бот читает `list[dict]`. Можно переходить к этапу 4.
 
