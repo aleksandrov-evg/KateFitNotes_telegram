@@ -12,15 +12,14 @@ from src.Kate_Fit_Notes.domain import (
     available_slots,
     format_client_list,
     parse_client_list,
-    should_complete_prepaid,
 )
 from src.Kate_Fit_Notes.repository import KateFitRepository
 from src.Kate_Fit_Notes.services.errors import (
     EmptyParticipantsError,
     InvalidTrainTypeError,
-    MultiplePrepaidError,
     SlotTakenError,
 )
+from src.Kate_Fit_Notes.services.prepaid import PrepaidService
 
 
 @dataclass(frozen=True)
@@ -29,35 +28,24 @@ class PersonalPriceHint:
     prepaid_price: Any = None
 
 
-def _used_count(row: dict) -> int:
-    return int(row.get("count") or 0)
-
-
 class BookingService:
     def __init__(self, repo: KateFitRepository):
         self._repo = repo
+        self._prepaid = PrepaidService(repo)
 
     def list_available_slots(self, session_date: Any) -> list:
         return available_slots(self._repo.select_time_at_data(session_date))
 
     def suggest_personal_price(self, client_id: Any, type_train_id: Any) -> PersonalPriceHint:
-        prepaid = self._repo.get_active_prepaid_for_client(client_id, type_train_id)
-        if len(prepaid) > 1:
-            raise MultiplePrepaidError(len(prepaid), [row["id"] for row in prepaid])
-        if len(prepaid) == 1:
-            return PersonalPriceHint(prepaid_price=prepaid[0]["price_per_train"])
+        prepaid_price = self._prepaid.price_for_session(client_id, type_train_id)
+        if prepaid_price is not None:
+            return PersonalPriceHint(prepaid_price=prepaid_price)
         return PersonalPriceHint(
             last_prices=self._repo.get_last_price_for_train(client_id, type_train_id)
         )
 
     def remaining_prepaid_sessions(self, client_id: Any, type_train_id: Any) -> int | None:
-        prepaid = self._repo.get_active_prepaid_for_client(client_id, type_train_id)
-        if len(prepaid) != 1:
-            return None
-        usage = self._repo.get_count_prepaid_train(client_id, type_train_id)
-        if len(usage) != 1:
-            return prepaid[0].get("count_train")
-        return usage[0]["count_train"] - _used_count(usage[0])
+        return self._prepaid.remaining_sessions(client_id, type_train_id)
 
     def book_personal(
         self,
@@ -75,15 +63,10 @@ class BookingService:
         if session_time in occupied:
             raise SlotTakenError("слот уже занят")
 
-        prepaid = self._repo.get_active_prepaid_for_client(client_id, type_train_id)
-        if len(prepaid) > 1:
-            raise MultiplePrepaidError(len(prepaid), [row["id"] for row in prepaid])
-        if price is None and len(prepaid) == 1:
-            price = prepaid[0]["price_per_train"]
-
-        complete_id: Any = False
-        if len(prepaid) == 1:
-            complete_id = self._prepaid_complete_id(client_id, type_train_id, prepaid[0])
+        prepaid_price = self._prepaid.price_for_session(client_id, type_train_id)
+        if price is None and prepaid_price is not None:
+            price = prepaid_price
+        complete_id = self._prepaid.complete_id_for_session(client_id, type_train_id)
 
         try:
             self._repo.insert_in_schedule(
@@ -108,16 +91,6 @@ class BookingService:
             "price": price,
             "type_train_id": type_train_id,
         }
-
-    def _prepaid_complete_id(
-        self, client_id: Any, type_train_id: Any, prepaid_row: dict
-    ) -> Any:
-        usage = self._repo.get_count_prepaid_train(client_id, type_train_id)
-        used = _used_count(usage[0]) if len(usage) == 1 else 0
-        count_train = usage[0]["count_train"] if len(usage) == 1 else prepaid_row["count_train"]
-        if should_complete_prepaid(count_train, used):
-            return prepaid_row["id"]
-        return False
 
     def book_group(
         self,

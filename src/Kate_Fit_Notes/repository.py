@@ -211,7 +211,7 @@ class PostgresRepository:
                     ),
                 )
                 logger.info("SQL %s", cur.statusmessage)
-                if set_is_complete_true:
+                if set_is_complete_true is not False and set_is_complete_true is not None:
                     cur.execute(
                         "UPDATE main.accounting SET is_complete = true WHERE id = %s",
                         (set_is_complete_true,),

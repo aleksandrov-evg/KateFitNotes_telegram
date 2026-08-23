@@ -19,9 +19,11 @@ from src.Kate_Fit_Notes.services.errors import (
     DuplicateClientError,
     EmptyParticipantsError,
     InvalidPhoneError,
+    InvalidPrepaidError,
     MultiplePrepaidError,
     SlotTakenError,
 )
+from src.Kate_Fit_Notes.services.prepaid import PrepaidService
 from src.Kate_Fit_Notes.settings import load_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +31,7 @@ _settings = load_settings()
 bot = telebot.TeleBot(_settings.telegram_token)
 client_service = ClientService(sql.repository)
 booking_service = BookingService(sql.repository)
+prepaid_service = PrepaidService(sql.repository)
 allow_add_client = 0
 current_data = {}
 current_operation = None
@@ -497,17 +500,17 @@ def callback_inline(call):
                     match call.data:
                         case 'approve_add':
                             try:
-                                result = sql.insert_in_accounting(
+                                prepaid_service.add_package(
                                     client_id=current_data_new.client['client'],
+                                    type_train_id=current_data_new.train['id'],
                                     summ=current_data_new.summ,
-                                    count_train=current_data_new.count_train,
-                                    price_per_train=price_per_train(
-                                        current_data_new.summ,
-                                        current_data_new.count_train,
-                                    ),
-                                    type_train_id=current_data_new.train['id']
+                                    count=current_data_new.count_train,
                                 )
                                 bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
+                            except InvalidPrepaidError:
+                                bot.send_message(call.message.chat.id, "❌ Некорректные сумма или количество!❌")
+                            except MultiplePrepaidError:
+                                bot.send_message(call.message.chat.id, "❌ У клиента уже есть незакрытая предоплата!❌")
                             except Exception:
                                 logging.exception("Ошибка добавления предоплаты")
                                 bot.send_message(call.message.chat.id, "❌ Ошибка добавления записи!❌")

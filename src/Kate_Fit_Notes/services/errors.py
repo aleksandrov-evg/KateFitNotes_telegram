@@ -21,6 +21,10 @@ class EmptyParticipantsError(ValueError):
     """В групповую запись не передали ни одного участника."""
 
 
+class InvalidPrepaidError(ValueError):
+    """Некорректные сумма или количество тренировок пакета."""
+
+
 class MultiplePrepaidError(ValueError):
     """У клиента больше одного незакрытого пакета предоплаты."""
 
