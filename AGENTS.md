@@ -18,12 +18,12 @@
 ## Карта файлов
 
 ```
-bot.py                          # хендлеры, меню, callback-сценарии, глобальное состояние
+bot.py                          # хендлеры, меню, callback-сценарии; состояние через SessionStore
 sql.py                          # тонкие обёртки над PostgresRepository
 src/Kate_Fit_Notes/settings.py        # конфиг: env, fallback config.ini
 src/Kate_Fit_Notes/db.py              # пул соединений PostgreSQL
 src/Kate_Fit_Notes/repository.py      # параметризованные запросы, list[dict]
-src/Kate_Fit_Notes/process_class.py   # класс CurrentData (состояние сценария оплаты)
+src/Kate_Fit_Notes/session.py         # ScenarioState + SessionStore по chat_id
 src/Kate_Fit_Notes/pipelines.py       # пустой файл, не использовать
 tests/                          # автотесты (pytest), не корневой test.py
 alembic/                        # миграции схемы main.* as-is
@@ -95,7 +95,7 @@ port=5432
 
 ## Сценарии бота
 
-Бот рассчитан на **одного пользователя**. Состояние глобальное, без привязки к `chat_id`.
+Бот рассчитан на **одного пользователя** (whitelist — этап 12). Состояние сценария ключуется `chat_id` (`SessionStore`), не глобальный синглтон.
 
 Главное меню (`/start` и кнопка «🔙 В главное меню»):
 
@@ -123,24 +123,21 @@ port=5432
 3. Дата → время → цена → подтверждение
 4. `client_list` пишется как PostgreSQL array-строка `{id1,id2,...}`; поле `client` для группы — заглушка `-1`
 
-### Предоплата (`current_data_new.process = add_money_in_accounting`)
+### Предоплата (`process = add_money_in_accounting`)
 
 1. Клиент → тип тренировки
 2. Текст: `<сумма> <количество>`, например `1000 10`
 3. Подтверждение → `sql.insert_in_accounting`
 
-## Состояние: два контура
+## Состояние: `SessionStore` по `chat_id`
 
-Не объединять без явной задачи. Сейчас живут параллельно:
-
-1. **`current_data`** — `dict` + `current_data_clear()`. Сценарии расписания (персональные/групповые тренировки).
-2. **`current_data_new`** — экземпляр `CurrentData`. Сценарий «Добавить оплату».
+Один объект `ScenarioState` на чат (`src/Kate_Fit_Notes/session.py`). Запись и оплата — поля того же объекта, разные `process`. Модульный `sessions` в `bot.py`; хендлеры берут `sessions.get(message.chat.id)`.
 
 Поля процесса: `process` (pipeline), `operation` (шаг). Callback'и смотрят на пару `(process, operation)` и на `call.data`.
 
 `call.data` часто — **индекс в текущем списке** (`list_client`, `list_train`, `list_time`), а не id из БД. Для мультивыбора клиента `callback_data` = `phone`. Не менять формат callback без проверки всех `match`/`if` в `callback_inline`.
 
-Сброс: `current_data_clear()` при `/start` и при входе в сценарий тренировки. Для оплаты процесс задаётся так: `current_data_new.process = "add_money_in_accounting"`.
+Сброс: `sessions.clear(chat_id)` при `/start` и «В главное меню»; при входе в персональную/групповую запись и «Добавить оплату» — `clear(chat_id, process=...)`. Сброс затрагивает только этот чат.
 
 ## SQL-слой (`sql.py` / `repository.py`)
 
@@ -198,13 +195,13 @@ uv run pytest tests/
 - Цены и количества — целые; ввод проверять `.isdigit()`.
 - После успешной/отменённой записи возвращать в `start()`.
 - `try/except` вокруг insert уже есть и глотает любые ошибки — при правках логировать исключение, не оставлять голый `except:`.
-- Не добавлять README, линтеры, рефакторинг `current_data` vs `CurrentData`, параметризацию всего SQL, если это не часть задачи.
+- Не добавлять README, линтеры, параметризацию всего SQL, если это не часть задачи. Не разводить снова два контура состояния.
 - `keyboa` в runtime не нужен.
 
 ## Чего не делать
 
 - Не коммитить токен бота, пароли, дампы `pg_db/`.
-- Не вводить multi-user state, пока бот однопользовательский, без явного запроса.
+- Не делать полноценный multi-user продукт сверх ключа `chat_id` (whitelist — этап 12).
 - Не менять смысл `client` = телефон и формат `client_list` `{1,2,3}` без миграции данных.
 - Не писать новые фичи в `main.py` или пустой `pipelines.py`.
 - Не запускать `git push` и не менять git config без просьбы.
@@ -217,5 +214,4 @@ uv run pytest tests/
 | Новый пункт меню | `start()`, ветка в `get_text_messages()` |
 | Новый шаг сценария | функции `show_*` + ветка в `callback_inline` |
 | Новая выборка/запись | метод в `repository.py`, обёртка в `sql.py`, вызов из `bot.py` |
-| Поля состояния оплаты | `CurrentData` в `process_class.py` |
-| Поля состояния расписания | словарь в `current_data_clear()` |
+| Поля состояния сценария | `ScenarioState` / `SessionStore` в `session.py` |
