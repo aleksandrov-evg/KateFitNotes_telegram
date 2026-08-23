@@ -6,7 +6,6 @@ import datetime
 from telebot import types
 from src.Kate_Fit_Notes.domain import (
     available_slots,
-    normalize_phone,
     parse_prepaid,
     parse_price,
     price_per_train,
@@ -16,11 +15,14 @@ from src.Kate_Fit_Notes.domain import (
     week_days,
 )
 from src.Kate_Fit_Notes.process_class import CurrentData
+from src.Kate_Fit_Notes.services.clients import ClientService
+from src.Kate_Fit_Notes.services.errors import DuplicateClientError, InvalidPhoneError
 from src.Kate_Fit_Notes.settings import load_settings
 
 logging.basicConfig(level=logging.INFO)
 _settings = load_settings()
 bot = telebot.TeleBot(_settings.telegram_token)
+client_service = ClientService(sql.repository)
 allow_add_client = 0
 current_data = {}
 current_operation = None
@@ -66,10 +68,6 @@ def current_data_clear(process=None):
 
 def generator_inline(list_button):
     return [types.InlineKeyboardButton(f"{i[0]}", callback_data=f'{i[1]}') for i in list_button]
-
-
-def validate_phone(message):
-    return normalize_phone(message.contact.phone_number)
 
 
 @bot.message_handler(commands=['button_return_to_start'])
@@ -174,11 +172,11 @@ def show_list_client(message, show_all=False):
     current_data_new.is_group = False
 
     if not show_all:
-        current_data['list_client'] = sql.select_last_client()
+        current_data['list_client'] = client_service.list_recent()
         current_data_new.list_client = current_data['list_client']
         text_message = 'Клиенты ранее посетившие занятия:'
     else:
-        current_data['list_client'] = sql.show_all_clients()
+        current_data['list_client'] = client_service.list_all()
         current_data_new.list_client = current_data['list_client']
         text_message = 'Все клиенты из базы:'
     markup = types.InlineKeyboardMarkup(row_width=2)
@@ -203,11 +201,11 @@ def show_multi_list_client(message, request_all_client=False):
     current_data['client'] = {'client': -1}
 
     if current_data['list_multi_select'] is None:
-        current_data['list_multi_select'] = sql.select_last_client()
+        current_data['list_multi_select'] = client_service.list_recent()
         for i in current_data['list_multi_select']:
             i['select'] = False
     if request_all_client:
-        list_all_client = sql.show_all_clients()
+        list_all_client = client_service.list_all()
         selected_list = [i['client'] for i in current_data['list_multi_select'] if i['select']]
         for client in list_all_client:
             if client['client'] in selected_list:
@@ -277,18 +275,17 @@ def get_text_messages(message):
     global allow_add_client
     if message.content_type == 'contact':
         if allow_add_client == 1:
-            phone_number = validate_phone(message)
-            if phone_number is None:
+            try:
+                client_service.create(
+                    message.contact.phone_number,
+                    message.contact.first_name,
+                    message.contact.last_name,
+                )
+                bot.send_message(message.from_user.id, "Ага, добавил")
+            except InvalidPhoneError:
                 bot.send_message(message.from_user.id, "Операция не выполнена! Не верный формат номера")
-            else:
-                search_client = sql.search_client(phone_number)
-                if not search_client:
-                    sql.insert_client_data(phone_number,
-                                           message.contact.first_name,
-                                           message.contact.last_name)
-                    bot.send_message(message.from_user.id, "Ага, добавил")
-                else:
-                    bot.send_message(message.from_user.id, "Такой клиент уже существует в базе")
+            except DuplicateClientError:
+                bot.send_message(message.from_user.id, "Такой клиент уже существует в базе")
         else:
             bot.send_message(message.from_user.id, "Для добавления клиента нужно выбрать пункт <➕ Новый клиент>")
         allow_add_client = 0
