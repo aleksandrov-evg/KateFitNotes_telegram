@@ -50,11 +50,19 @@ def test_env_example_documents_token_and_test_db():
     assert "Kate_fitness_test" in text
 
 
-def test_sql_py_does_not_log_full_query_with_pii():
-    source = (ROOT / "sql.py").read_text(encoding="utf-8")
+def test_repository_does_not_log_full_query_with_pii():
+    source = (ROOT / "src/Kate_Fit_Notes/repository.py").read_text(encoding="utf-8")
     assert "cursor.query" not in source
     assert "logging" in source
     assert "statusmessage" in source
+
+
+def test_sql_py_has_no_docker_inspect_or_raw_sql():
+    source = (ROOT / "sql.py").read_text(encoding="utf-8")
+    assert "docker inspect" not in source
+    assert "os.system" not in source
+    assert "execute_query" not in source
+    assert "cursor.query" not in source
 
 
 def test_pytest_does_not_autoload_dotenv():

@@ -79,15 +79,15 @@ class TestLoadSettingsIniFallback:
         assert settings.telegram_token == "only-token-env"
         assert settings.sql_host == "host-ini"
 
-    def test_empty_host_from_ini_is_allowed(self, tmp_path: Path):
+    def test_empty_host_from_ini_is_error(self, tmp_path: Path):
         path = tmp_path / "config.ini"
         path.write_text(
             "[main]\nTOKEN=t\n\n"
             "[sql]\ndatabase=db\nuser=u\npassword=p\nhost=\nport=5432\n",
             encoding="utf-8",
         )
-        settings = load_settings(environ={}, ini_path=path)
-        assert settings.sql_host == ""
+        with pytest.raises(ConfigError, match="SQL_HOST"):
+            load_settings(environ={}, ini_path=path)
 
 
 class TestLoadSettingsErrors:

@@ -154,9 +154,12 @@ class TestAccountingNowSql:
         assert "'" not in ACCOUNTING_NOW_SQL
         assert '"' not in ACCOUNTING_NOW_SQL
 
-    def test_sql_py_inserts_unquoted_now(self):
+    def test_repository_inserts_unquoted_now(self):
         source = (
-            Path(__file__).resolve().parents[1] / "sql.py"
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "Kate_Fit_Notes"
+            / "repository.py"
         ).read_text(encoding="utf-8")
         assert "'now()'" not in source
         assert "ACCOUNTING_NOW_SQL" in source

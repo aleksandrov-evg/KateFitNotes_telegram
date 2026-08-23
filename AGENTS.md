@@ -19,8 +19,10 @@
 
 ```
 bot.py                          # хендлеры, меню, callback-сценарии, глобальное состояние
-sql.py                          # все SQL-запросы к PostgreSQL
+sql.py                          # тонкие обёртки над PostgresRepository
 src/Kate_Fit_Notes/settings.py        # конфиг: env, fallback config.ini
+src/Kate_Fit_Notes/db.py              # пул соединений PostgreSQL
+src/Kate_Fit_Notes/repository.py      # параметризованные запросы, list[dict]
 src/Kate_Fit_Notes/process_class.py   # класс CurrentData (состояние сценария оплаты)
 src/Kate_Fit_Notes/pipelines.py       # пустой файл, не использовать
 tests/                          # автотесты (pytest), не корневой test.py
@@ -55,7 +57,7 @@ host=db_pg
 port=5432
 ```
 
-Если `host` пустой, `sql.py` пытается взять IP контейнера `pg_db` через `docker inspect`.
+`SQL_HOST` обязателен (env или `[sql] host`). Пустой host — ошибка конфига, без `docker inspect`.
 
 Переменные окружения (`.env` / compose):
 
@@ -140,12 +142,13 @@ port=5432
 
 Сброс: `current_data_clear()` при `/start` и при входе в сценарий тренировки. Для оплаты процесс задаётся так: `current_data_new.process = "add_money_in_accounting"`.
 
-## SQL-слой (`sql.py`)
+## SQL-слой (`sql.py` / `repository.py`)
 
-- `execute_query(text)` открывает соединение, `autocommit=True`, пишет в `logging` только `statusmessage` (не полный SQL с телефонами).
-- Для `SELECT` возвращает список вида `['SELECT', '<n>', list[dict]]`. Код бота читает `result[1]` (число строк) и `result[2]` (строки). Для `INSERT`/`UPDATE` возвращается `None` — это учитывают хендлеры.
-- Запросы собираются f-строками с подстановкой значений. **Не добавлять пользовательский ввод в SQL без санитизации**; новые запросы лучше писать с плейсхолдерами `%s` / `cursor.execute(sql, params)`.
-- Не переписывать все существующие запросы на параметризацию в рамках мелкой задачи.
+- Репозиторий: `src/Kate_Fit_Notes/repository.py` (`PostgresRepository`). Соединения — пул в `src/Kate_Fit_Notes/db.py` (`with` + `putconn` в `finally`).
+- `sql.py` — тонкие обёртки с прежними именами функций; при импорте вызывает `load_settings()`.
+- Выборки возвращают `list[dict]`; пустой список — нет строк. Число строк — `len(rows)`, не `result[1]` / `result[2]`. `select_time_at_data` — список времён. INSERT/UPDATE — `None`.
+- Запросы с плейсхолдерами `%s` / `cursor.execute(sql, params)`. Логируется только `statusmessage`, не полный SQL с телефонами.
+- Тесты репозитория импортируют `repository` / `db` и собирают его из `DATABASE_URL`. Не импортировать `bot.py` / `sql.py`.
 
 Типичные функции:
 
@@ -184,7 +187,7 @@ docker compose up -d db_pg_test
 uv run pytest tests/
 ```
 
-Без `DATABASE_URL` DB-тесты скипаются. Живой Telegram-токен для `pytest tests/` не нужен. Не импортировать `bot.py` / `sql.py` в тестах: они вызывают `load_settings()` при импорте.
+Без `DATABASE_URL` DB-тесты скипаются. Живой Telegram-токен для `pytest tests/` не нужен. Не импортировать `bot.py` / `sql.py` в тестах: они вызывают `load_settings()` при импорте. Тесты репозитория: `PostgresRepository.from_dsn(DATABASE_URL)`.
 
 ## Соглашения по коду
 
@@ -213,6 +216,6 @@ uv run pytest tests/
 |--------|----------------|
 | Новый пункт меню | `start()`, ветка в `get_text_messages()` |
 | Новый шаг сценария | функции `show_*` + ветка в `callback_inline` |
-| Новая выборка/запись | функция в `sql.py`, вызов из `bot.py` |
+| Новая выборка/запись | метод в `repository.py`, обёртка в `sql.py`, вызов из `bot.py` |
 | Поля состояния оплаты | `CurrentData` в `process_class.py` |
 | Поля состояния расписания | словарь в `current_data_clear()` |

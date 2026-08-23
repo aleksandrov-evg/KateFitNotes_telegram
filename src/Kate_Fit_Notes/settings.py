@@ -102,7 +102,6 @@ def load_settings(
     sql_host = _pick(
         _env_value(env, ENV_SQL_HOST),
         _ini_value(parser, "sql", "host"),
-        allow_empty=True,
     )
     sql_port_raw = _pick(
         _env_value(env, ENV_SQL_PORT),
@@ -118,7 +117,7 @@ def load_settings(
         missing.append("TG_PASS / [sql] password")
     if not sql_database:
         missing.append("SQL_DATABASE / [sql] database")
-    if sql_host is None:
+    if not sql_host:
         missing.append("SQL_HOST / [sql] host")
     if not sql_port_raw:
         missing.append("SQL_PORT / [sql] port")

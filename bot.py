@@ -113,26 +113,26 @@ def input_train_price(message):
             client_id=current_data['client']['client'],
             type_train_id=current_data['train']['id']
         )
-        current_data['id_prepaid_data'] = prepaid_train[2]
+        current_data['id_prepaid_data'] = prepaid_train
 
-        match len(prepaid_train[2]):
+        match len(prepaid_train):
             case 0:
                 # если нет предоплаты, указываем последние заполненые
                 last_train_price = sql.get_last_price_for_train(
                     client_id=current_data['client']['client'],
                     type_train_id=current_data['train']['id']
                 )
-                if len(last_train_price[2]) > 0:
+                if last_train_price:
                     additional_text = 'Стоимость последних тренировок:\n'
-                    for i in last_train_price[2]:
+                    for i in last_train_price:
                         additional_text += f"\n{i['price']}"
             case _:
-                if int(prepaid_train[1]) == 1:
-                    additional_text = f"Стоимость предоплаченных тренировок {prepaid_train[2][0]['price_per_train']}"
-                    current_data['id_prepaid_row'] = [_['id'] for _ in prepaid_train[2]]
-                elif int(prepaid_train[1]) > 1:
-                    additional_text = (f"!!!У клиента {prepaid_train[1]} не закрытых тренировок!!!"
-                                       f"id {[_['id'] for _ in prepaid_train[2]]}")
+                if len(prepaid_train) == 1:
+                    additional_text = f"Стоимость предоплаченных тренировок {prepaid_train[0]['price_per_train']}"
+                    current_data['id_prepaid_row'] = [_['id'] for _ in prepaid_train]
+                elif len(prepaid_train) > 1:
+                    additional_text = (f"!!!У клиента {len(prepaid_train)} не закрытых тренировок!!!"
+                                       f"id {[_['id'] for _ in prepaid_train]}")
                     bot.send_message(message.chat.id, f'Запись не будет добавлена!',
                                      reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).add(
                                          button_return_to_start()))
@@ -149,7 +149,7 @@ def show_schedule_for_client(message):
 
 @bot.message_handler(commands=['show_all_type_train'])
 def show_all_type_train(message, group=False):
-    current_data['list_train'] = sql.list_all_train(group)[2]
+    current_data['list_train'] = sql.list_all_train(group)
     current_data_new.list_train = current_data['list_train']
     markup = types.InlineKeyboardMarkup(row_width=2)
     current_data['operation'] = 'choose_train'
@@ -174,11 +174,11 @@ def show_list_client(message, show_all=False):
     current_data_new.is_group = False
 
     if not show_all:
-        current_data['list_client'] = sql.select_last_client()[2]
+        current_data['list_client'] = sql.select_last_client()
         current_data_new.list_client = current_data['list_client']
         text_message = 'Клиенты ранее посетившие занятия:'
     else:
-        current_data['list_client'] = sql.show_all_clients()[2]
+        current_data['list_client'] = sql.show_all_clients()
         current_data_new.list_client = current_data['list_client']
         text_message = 'Все клиенты из базы:'
     markup = types.InlineKeyboardMarkup(row_width=2)
@@ -203,11 +203,11 @@ def show_multi_list_client(message, request_all_client=False):
     current_data['client'] = {'client': -1}
 
     if current_data['list_multi_select'] is None:
-        current_data['list_multi_select'] = sql.select_last_client()[2]
+        current_data['list_multi_select'] = sql.select_last_client()
         for i in current_data['list_multi_select']:
             i['select'] = False
     if request_all_client:
-        list_all_client = sql.show_all_clients()[2]
+        list_all_client = sql.show_all_clients()
         selected_list = [i['client'] for i in current_data['list_multi_select'] if i['select']]
         for client in list_all_client:
             if client['client'] in selected_list:
@@ -231,8 +231,8 @@ def show_multi_list_client(message, request_all_client=False):
 def confirm_add(message, list_current_select=[]):
     list_client = sql.select_last_client()
     markup = types.InlineKeyboardMarkup(row_width=2)
-    list_button = [types.InlineKeyboardButton(f'{list_client[2][i]["name"]}', callback_data=f'{i}')
-                   for i in range(len(list_client[2]))]
+    list_button = [types.InlineKeyboardButton(f'{list_client[i]["name"]}', callback_data=f'{i}')
+                   for i in range(len(list_client))]
     markup.add(*list_button)
 
 
@@ -282,7 +282,7 @@ def get_text_messages(message):
                 bot.send_message(message.from_user.id, "Операция не выполнена! Не верный формат номера")
             else:
                 search_client = sql.search_client(phone_number)
-                if int(search_client[1]) == 0:
+                if not search_client:
                     sql.insert_client_data(phone_number,
                                            message.contact.first_name,
                                            message.contact.last_name)
@@ -328,7 +328,7 @@ def get_text_messages(message):
                         f'Аренда:   *{_["sum_rent"]}*\n'
                         f'Всего:    *{_["total_sum"]}*\n'
                         f'========================='
-                        for _ in result[2]
+                        for _ in result
                     ]
                 ),
                 parse_mode='Markdown'
@@ -390,19 +390,19 @@ def confirm_add(message):
                 client_id=current_data['client']['client'],
                 type_train_id=current_data['train']['id']
             )
-            if len(prepaid_train[2]) == 1:
+            if len(prepaid_train) == 1:
 
                 current_data['set_is_complete_true'] = current_data['id_prepaid_row'][0] \
                     if should_complete_prepaid(
-                        prepaid_train[2][0]['count_train'],
-                        prepaid_train[2][0]['count'],
+                        prepaid_train[0]['count_train'],
+                        prepaid_train[0]['count'],
                     ) else False
 
                 additonal_info = (f"\n!У клиента есть пред оплаченные тренировки: "
-                                  f"{prepaid_train[2][0]['count_train'] - prepaid_train[2][0]['count']}\n шт!")
+                                  f"{prepaid_train[0]['count_train'] - prepaid_train[0]['count']}\n шт!")
             else:
-                additonal_info = (f"!!!У клиента {prepaid_train[1]} не закрытых предоплаты\n"
-                                  f"id: {[_['id'] for _ in prepaid_train[2]]}")
+                additonal_info = (f"!!!У клиента {len(prepaid_train)} не закрытых предоплаты\n"
+                                  f"id: {[_['id'] for _ in prepaid_train]}")
 
     bot.send_message(message.chat.id, f"Добавить тренировку *{current_data['train']['type_train']}*\n"
                                       f"{text_client}"
