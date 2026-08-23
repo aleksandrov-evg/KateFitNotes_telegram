@@ -24,6 +24,7 @@ from src.Kate_Fit_Notes.services.errors import (
     SlotTakenError,
 )
 from src.Kate_Fit_Notes.services.prepaid import PrepaidService
+from src.Kate_Fit_Notes.services.report import ReportService
 from src.Kate_Fit_Notes.settings import load_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +33,7 @@ bot = telebot.TeleBot(_settings.telegram_token)
 client_service = ClientService(sql.repository)
 booking_service = BookingService(sql.repository)
 prepaid_service = PrepaidService(sql.repository)
+report_service = ReportService(sql.repository)
 allow_add_client = 0
 current_data = {}
 current_operation = None
@@ -320,23 +322,31 @@ def get_text_messages(message):
             current_data_clear('list_train_for_client')
             show_list_client(message)
         elif message.text == '💰 Отчет по тренировкам':
-            result = sql.get_incom_all_month_balance()
-
-            bot.send_message(
-                message.chat.id,
-                text="\n".join(
-                    [
-                        f'Дата:     *{_["month"].strftime("%m.%Y")}*\n'
-                        f'Прибыль:  *{_["income"]}*\n'
-                        f'Аренда:   *{_["sum_rent"]}*\n'
-                        f'Всего:    *{_["total_sum"]}*\n'
-                        f'========================='
-                        for _ in result
-                    ]
-                ),
-                parse_mode='Markdown'
-            )
-
+            try:
+                result = report_service.monthly_report()
+                if not result:
+                    text = (
+                        "Дата:     *—*\n"
+                        "Прибыль:  *0*\n"
+                        "Аренда:   *0*\n"
+                        "Всего:    *0*\n"
+                        "========================="
+                    )
+                else:
+                    text = "\n".join(
+                        [
+                            f'Дата:     *{_["month"].strftime("%m.%Y")}*\n'
+                            f'Прибыль:  *{_["income"]}*\n'
+                            f'Аренда:   *{_["sum_rent"]}*\n'
+                            f'Всего:    *{_["total_sum"]}*\n'
+                            f'========================='
+                            for _ in result
+                        ]
+                    )
+                bot.send_message(message.chat.id, text=text, parse_mode='Markdown')
+            except Exception:
+                logging.exception("Ошибка отчёта по тренировкам")
+                bot.send_message(message.chat.id, "❌ Ошибка формирования отчёта!❌")
             start(message)
         elif message.text == "Добавить оплату":
             current_data_new.process = "add_money_in_accounting"
