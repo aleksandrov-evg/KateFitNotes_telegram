@@ -25,7 +25,7 @@ from src.Kate_Fit_Notes.settings import Settings
 
 CHAT_A = 1001
 CHAT_B = 2002
-CLIENT = {"client": 9001112233, "name": "Анна", "surname": "Иванова"}
+CLIENT = {"client": 42, "name": "Анна", "surname": "Иванова"}
 TRAIN = {"id": 1, "type_train": "силовая 1 чел", "group_train": False}
 SESSION_DATE = date(2026, 8, 24)
 SESSION_TIME = time(10, 0)
@@ -67,7 +67,7 @@ class FakeBotRepo:
         return []
 
     def insert_client_data(self, *args, **kwargs):
-        return None
+        return 1
 
     def select_time_at_data(self, session_date):
         return []
@@ -159,7 +159,7 @@ def test_approve_add_calls_book_personal_with_state_ids():
     state.train_price = 1500
     app.callback_inline(make_call(CHAT_A, "approve_add"))
     app.booking_service.book_personal.assert_called_once_with(
-        client_id=9001112233,
+        client_id=42,
         type_train_id=1,
         session_date=SESSION_DATE,
         session_time=SESSION_TIME,
@@ -167,17 +167,17 @@ def test_approve_add_calls_book_personal_with_state_ids():
     )
 
 
-def test_client_callback_uses_phone_not_index():
+def test_client_callback_uses_id_not_index():
     app = make_app()
     state = app.sessions.clear(CHAT_A, "add_single_train_in_schedule")
     state.operation = "choose_client"
     state.list_client = [
-        {"client": 9001112233, "name": "Анна", "surname": "Иванова"},
-        {"client": 9004445566, "name": "Борис", "surname": "Петров"},
+        {"client": 42, "name": "Анна", "surname": "Иванова"},
+        {"client": 43, "name": "Борис", "surname": "Петров"},
     ]
     app.booking_service.list_train_types = MagicMock(return_value=[dict(TRAIN)])
-    app.callback_inline(make_call(CHAT_A, "9004445566"))
-    assert app.sessions.get(CHAT_A).client["client"] == 9004445566
+    app.callback_inline(make_call(CHAT_A, "43"))
+    assert app.sessions.get(CHAT_A).client["client"] == 43
     app.booking_service.list_train_types.assert_called_once_with(False)
 
 
@@ -205,7 +205,7 @@ def test_main_menu_clears_only_current_chat():
 
 def test_markup_callback_data_is_entity_id_not_index():
     client_markup = client_list_markup([CLIENT])
-    assert client_markup.keyboard[0][0].callback_data == "9001112233"
+    assert client_markup.keyboard[0][0].callback_data == "42"
     train_markup = train_types_markup([TRAIN])
     assert train_markup.keyboard[0][0].callback_data == "1"
     day = date(2026, 8, 24)

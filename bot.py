@@ -184,7 +184,7 @@ class BotApp:
         state = self.sessions.get(message.chat.id)
         state.operation = "choose_client_multi"
         state.is_group = True
-        state.client = {"client": -1}
+        state.client = None
         if state.list_multi_select is None:
             state.list_multi_select = self.client_service.list_recent()
             for client in state.list_multi_select:

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Iterable, Literal
+from typing import Iterable, Literal
 
 WORK_HOUR_START = 7
 WORK_HOUR_END = 23  # исключительно: последний слот 22:00
 ACCOUNTING_NOW_SQL = "NOW()"
-GROUP_CLIENT_ID = -1
 
 PhoneStatus = Literal["invalid", "ok"]
 WeekShift = Literal["prev", "current", "next"]
@@ -95,24 +94,3 @@ def should_complete_prepaid(count_train: int, used_count: int) -> bool:
 
 def time_choice_caption(date: datetime.date | str) -> str:
     return f"Выбор времени на дату: {date}"
-
-
-def format_client_list(ids: Iterable | None) -> str:
-    """Текущий формат записи: строка PostgreSQL-массива {id1,id2,...}."""
-    if not ids:
-        return "{}"
-    return "{" + ",".join(str(item) for item in ids) + "}"
-
-
-def parse_client_list(raw: Any) -> list[int]:
-    """Строка {1,2,3} или bigint[] из драйвера → список id."""
-    if raw is None:
-        return []
-    if isinstance(raw, (list, tuple)):
-        return [int(item) for item in raw]
-    text = str(raw).strip()
-    if text.startswith("{") and text.endswith("}"):
-        text = text[1:-1]
-    if not text.strip():
-        return []
-    return [int(part.strip()) for part in text.split(",") if part.strip()]

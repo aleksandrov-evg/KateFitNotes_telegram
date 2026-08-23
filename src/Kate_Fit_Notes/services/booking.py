@@ -7,12 +7,7 @@ from typing import Any
 
 from psycopg2.errors import UniqueViolation
 
-from src.Kate_Fit_Notes.domain import (
-    GROUP_CLIENT_ID,
-    available_slots,
-    format_client_list,
-    parse_client_list,
-)
+from src.Kate_Fit_Notes.domain import available_slots
 from src.Kate_Fit_Notes.repository import KateFitRepository
 from src.Kate_Fit_Notes.services.errors import (
     EmptyParticipantsError,
@@ -69,13 +64,14 @@ class BookingService:
         prepaid_price = self._prepaid.price_for_session(client_id, type_train_id)
         if price is None and prepaid_price is not None:
             price = prepaid_price
+        accounting_id = self._prepaid.package_id_for_session(client_id, type_train_id)
         complete_id = self._prepaid.complete_id_for_session(client_id, type_train_id)
 
         try:
             self._repo.insert_in_schedule(
                 session_date,
                 client_id,
-                format_client_list([client_id]),
+                [client_id],
                 session_time,
                 train.get("rent_debt"),
                 train.get("type_train"),
@@ -83,6 +79,7 @@ class BookingService:
                 price,
                 type_train_id,
                 complete_id,
+                accounting_id,
             )
         except UniqueViolation as exc:
             raise SlotTakenError("слот уже занят") from exc
@@ -93,6 +90,7 @@ class BookingService:
             "time": session_time,
             "price": price,
             "type_train_id": type_train_id,
+            "accounting_id": accounting_id,
         }
 
     def book_group(
@@ -114,12 +112,12 @@ class BookingService:
         if session_time in occupied:
             raise SlotTakenError("слот уже занят")
 
-        client_list = format_client_list(client_ids)
+        participants = [int(item) for item in client_ids]
         try:
             self._repo.insert_in_schedule(
                 session_date,
-                GROUP_CLIENT_ID,
-                client_list,
+                None,
+                participants,
                 session_time,
                 train.get("rent_debt"),
                 train.get("type_train"),
@@ -127,14 +125,16 @@ class BookingService:
                 price,
                 type_train_id,
                 False,
+                None,
             )
         except UniqueViolation as exc:
             raise SlotTakenError("слот уже занят") from exc
 
         row = self._repo.get_schedule_at(session_date, session_time)
-        participants = parse_client_list(row["client_list"] if row else client_list)
+        if row:
+            participants = self._repo.get_schedule_participants(row["id"])
         return {
-            "client": GROUP_CLIENT_ID,
+            "client": None,
             "participants": participants,
             "date": session_date,
             "time": session_time,

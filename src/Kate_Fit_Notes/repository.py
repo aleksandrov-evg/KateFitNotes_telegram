@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import Any, Protocol
+from typing import Any, Iterable, Protocol
 
 from psycopg2.extras import RealDictCursor
 
@@ -20,7 +20,7 @@ class KateFitRepository(Protocol):
 
     def insert_client_data(
         self, phone_number: Any, name: str = "None", surname: str = "None"
-    ) -> None: ...
+    ) -> int | None: ...
 
     def show_all_clients(self) -> list[dict]: ...
 
@@ -34,11 +34,13 @@ class KateFitRepository(Protocol):
 
     def get_schedule_at(self, date: Any, time: Any) -> dict | None: ...
 
+    def get_schedule_participants(self, schedule_id: Any) -> list[int]: ...
+
     def insert_in_schedule(
         self,
         date: Any,
         client_id: Any,
-        client_list: Any,
+        participant_ids: Any,
         time: Any,
         rent_debt: Any,
         type_train: Any,
@@ -46,6 +48,7 @@ class KateFitRepository(Protocol):
         train_price: Any,
         type_train_id: Any,
         set_is_complete_true: Any = False,
+        accounting_id: Any = None,
     ) -> None: ...
 
     def insert_in_accounting(
@@ -70,6 +73,12 @@ class KateFitRepository(Protocol):
     ) -> list[dict]: ...
 
     def get_incom_all_month_balance(self) -> list[dict]: ...
+
+
+def _as_id_list(raw: Iterable | None) -> list[int]:
+    if not raw:
+        return []
+    return [int(item) for item in raw]
 
 
 class PostgresRepository:
@@ -112,27 +121,34 @@ class PostgresRepository:
 
     def insert_client_data(
         self, phone_number: Any, name: str = "None", surname: str = "None"
-    ) -> None:
-        self._execute(
-            "INSERT INTO main.client (phone, name, surname, add_time) "
-            "VALUES (%s, %s, %s, %s)",
-            (phone_number, name, surname, datetime.date.today()),
-        )
+    ) -> int | None:
+        with self._pool.connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "INSERT INTO main.client (phone, name, surname, add_time) "
+                    "VALUES (%s, %s, %s, %s) RETURNING id",
+                    (phone_number, name, surname, datetime.date.today()),
+                )
+                logger.info("SQL %s", cur.statusmessage)
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return int(row["id"])
 
     def show_all_clients(self) -> list[dict]:
         return self._fetch_all(
-            "SELECT name, surname, phone AS client, add_time, false AS select "
+            "SELECT name, surname, id AS client, phone, add_time, false AS select "
             "FROM main.client ORDER BY add_time"
         )
 
     def select_last_client(self, number_client: int = 0) -> list[dict]:
         sql = (
-            "SELECT main.schedule.client, MAX(main.schedule.date), "
-            "main.client.name, main.client.surname "
-            "FROM main.schedule LEFT JOIN main.client "
-            "ON main.schedule.client = main.client.phone "
-            "GROUP BY client, main.client.name, main.client.surname "
-            "ORDER BY MAX(date) DESC"
+            "SELECT c.id AS client, c.phone, MAX(s.date), c.name, c.surname "
+            "FROM main.schedule_participant sp "
+            "JOIN main.schedule s ON s.id = sp.schedule_id "
+            "JOIN main.client c ON c.id = sp.client_id "
+            "GROUP BY c.id, c.phone, c.name, c.surname "
+            "ORDER BY MAX(s.date) DESC"
         )
         params: tuple = ()
         if number_client != 0:
@@ -167,11 +183,19 @@ class PostgresRepository:
         )
         return rows[0] if rows else None
 
+    def get_schedule_participants(self, schedule_id: Any) -> list[int]:
+        rows = self._fetch_all(
+            "SELECT client_id FROM main.schedule_participant "
+            "WHERE schedule_id = %s ORDER BY client_id",
+            (schedule_id,),
+        )
+        return [int(row["client_id"]) for row in rows]
+
     def insert_in_schedule(
         self,
         date: Any,
         client_id: Any,
-        client_list: Any,
+        participant_ids: Any,
         time: Any,
         rent_debt: Any,
         type_train: Any,
@@ -179,14 +203,16 @@ class PostgresRepository:
         train_price: Any,
         type_train_id: Any,
         set_is_complete_true: Any = False,
+        accounting_id: Any = None,
     ) -> None:
+        participants = _as_id_list(participant_ids)
         with self._pool.connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 price = train_price
-                if price is None:
+                if price is None and client_id is not None:
                     cur.execute(
                         "SELECT price FROM main.price "
-                        "WHERE client = %s AND date <= %s "
+                        "WHERE client_id = %s AND date <= %s "
                         "ORDER BY date DESC LIMIT 1",
                         (client_id, date),
                     )
@@ -196,8 +222,9 @@ class PostgresRepository:
                 cur.execute(
                     "INSERT INTO main.schedule "
                     "(price, spend, date, time, rent_debt, type_train, "
-                    "client, client_list, is_group, type_train_id) "
-                    "VALUES (%s, False, %s, %s, %s, %s, %s, %s::bigint[], %s, %s)",
+                    "client_id, is_group, type_train_id, accounting_id) "
+                    "VALUES (%s, False, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "RETURNING id",
                     (
                         price,
                         date,
@@ -205,12 +232,21 @@ class PostgresRepository:
                         rent_debt,
                         type_train,
                         client_id,
-                        client_list,
                         is_group,
                         type_train_id,
+                        accounting_id,
                     ),
                 )
                 logger.info("SQL %s", cur.statusmessage)
+                inserted = cur.fetchone()
+                schedule_id = inserted["id"] if inserted else None
+                for participant_id in participants:
+                    cur.execute(
+                        "INSERT INTO main.schedule_participant "
+                        "(schedule_id, client_id) VALUES (%s, %s)",
+                        (schedule_id, participant_id),
+                    )
+                    logger.info("SQL %s", cur.statusmessage)
                 if set_is_complete_true is not False and set_is_complete_true is not None:
                     cur.execute(
                         "UPDATE main.accounting SET is_complete = true WHERE id = %s",
@@ -247,14 +283,13 @@ class PostgresRepository:
         self, client_id: Any, type_train_id: Any
     ) -> list[dict]:
         return self._fetch_all(
-            "SELECT a.count_train, count(s.client) "
-            "FROM main.accounting a RIGHT JOIN main.schedule s "
-            "ON a.client_id = s.client "
-            "WHERE s.client = %s "
-            "AND a.created_at <= s.add_time "
+            "SELECT a.count_train, count(s.id) AS count "
+            "FROM main.accounting a "
+            "LEFT JOIN main.schedule s ON s.accounting_id = a.id "
+            "WHERE a.client_id = %s "
+            "AND a.type_train_id = %s "
             "AND a.is_complete = False "
-            "AND s.type_train_id = %s "
-            "GROUP BY a.count_train",
+            "GROUP BY a.id, a.count_train",
             (client_id, type_train_id),
         )
 
@@ -263,7 +298,7 @@ class PostgresRepository:
     ) -> list[dict]:
         return self._fetch_all(
             "SELECT * FROM main.schedule "
-            "WHERE client = %s AND type_train_id = %s "
+            "WHERE client_id = %s AND type_train_id = %s "
             "ORDER BY add_time DESC "
             "LIMIT 4",
             (client_id, type_train_id),

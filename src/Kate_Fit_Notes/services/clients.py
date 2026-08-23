@@ -32,10 +32,16 @@ class ClientService:
         display_name = _display_name(name)
         display_surname = _display_name(surname)
         try:
-            self._repo.insert_client_data(phone, display_name, display_surname)
+            client_id = self._repo.insert_client_data(phone, display_name, display_surname)
         except UniqueViolation as exc:
             raise DuplicateClientError("клиент уже существует") from exc
-        return {"phone": phone, "name": display_name, "surname": display_surname}
+        return {
+            "id": client_id,
+            "client": client_id,
+            "phone": phone,
+            "name": display_name,
+            "surname": display_surname,
+        }
 
     def find_by_phone(self, raw_phone: str | None) -> dict | None:
         phone = normalize_phone(raw_phone)

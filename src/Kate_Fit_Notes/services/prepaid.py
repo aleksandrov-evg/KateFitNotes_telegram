@@ -1,9 +1,7 @@
 """Пакеты предоплаты: создание и списание занятий. Без Telegram.
 
-Эвристика списания (явный accounting_id — этап 11):
-JOIN accounting × schedule по client + type_train_id сессии,
-accounting.created_at <= schedule.add_time, is_complete = false.
-К пакету не привязываем id: занятия другого типа и старше пакета
+Списание только по schedule.accounting_id: used = число занятий
+с этим id пакета. Занятия без accounting_id или с чужим пакетом
 в used не входят. Два открытых пакета — отказ без записи.
 """
 
@@ -73,6 +71,12 @@ class PrepaidService:
         if len(usage) != 1:
             return prepaid[0].get("count_train")
         return usage[0]["count_train"] - _used_count(usage[0])
+
+    def package_id_for_session(self, client_id: Any, type_train_id: Any) -> Any:
+        prepaid = self._active(client_id, type_train_id)
+        if len(prepaid) != 1:
+            return None
+        return prepaid[0]["id"]
 
     def complete_id_for_session(self, client_id: Any, type_train_id: Any) -> Any:
         prepaid = self._active(client_id, type_train_id)

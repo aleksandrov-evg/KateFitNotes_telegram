@@ -81,16 +81,17 @@ port=5432
 
 Схема `main`. Снимок as-is в Alembic (`alembic/versions/0001_initial_as_is.py`) по дампу БД **Kate_fitness** (`backups/kate_fitness_schema.sql`). Кластерный дамп с данными в git не класть. На прод не накатывать, пока не попросили.
 
-| Таблица            | Назначение | Ключевые поля (по дампу) |
+| Таблица | Назначение | Ключевые поля |
 |--------------------|------------|-----------------------------|
-| `main.client`      | клиенты    | PK `phone` (id клиента), `name`, `surname`, `add_time`, `inactive` |
-| `main.trains`      | типы тренировок | PK `id`, `type_train`, `group_train`, `rent_debt`, `date` |
-| `main.schedule`    | записи занятий | PK `id`, UNIQUE `(date, time, client)`, `client_list bigint[]`, `studio`, `price real`, `spend`, `add_time`, `type_train_id` |
-| `main.accounting`  | предоплаты | PK `id` IDENTITY, `client_id`, `summ`, `count_train`, `price_per_train`, `type_train_id`, `is_complete`, `type_action`, `comment`, `created_at`, `updated_at` |
-| `main.price`       | история цен | PK `id`, `client`, `date`, `price real` |
-| `main.test`        | отладка    | `dig_array bigint[]` |
+| `main.client` | клиенты | PK `id`, UNIQUE `phone`, `name`, `surname`, `add_time`, `inactive` |
+| `main.trains` | типы тренировок | PK `id`, `type_train`, `group_train`, `rent_debt`, `date` |
+| `main.schedule` | записи занятий | PK `id`, UNIQUE `(date, time)`, `client_id` (NULL у группы), `accounting_id`, `studio`, `price real`, `spend`, `add_time`, `type_train_id` |
+| `main.schedule_participant` | участники занятия | PK `(schedule_id, client_id)`, FK на `schedule` и `client` |
+| `main.accounting` | предоплаты | PK `id` IDENTITY, `client_id` → `client.id`, `summ`, `count_train`, `price_per_train`, `type_train_id`, `is_complete`, `type_action`, `comment`, `created_at`, `updated_at` |
+| `main.price` | история цен | PK `id`, `client_id` → `client.id`, `date`, `price real` |
+| `main.test` | отладка | `dig_array bigint[]` |
 
-Таблицы `main.payment` в проде нет. Идентификатор клиента — **телефон** (`phone`). `client_list` в БД — массив `bigint[]` (бот по-прежнему шлёт строку `{1,2,3}`).
+Таблицы `main.payment` в проде нет. Идентификатор клиента — surrogate `id`; телефон — уникальное поле. Участники группы — `schedule_participant`, не `client_list` и не `client = -1`. Списание пакета — по `schedule.accounting_id`. Схема as-is в `0001`, модель сайта — `0002_site_model`. На прод не накатывать, пока не попросили.
 
 Рабочие часы слотов: 07:00–23:00 (`domain.work_slots`). Занятые слоты на дату = `SELECT time FROM main.schedule WHERE date = ...`.
 
@@ -122,7 +123,7 @@ port=5432
 1. Тип (`group_train = true`)
 2. Мультивыбор клиентов (флаг `select` в списке)
 3. Дата → время → цена → подтверждение
-4. `client_list` пишется как PostgreSQL array-строка `{id1,id2,...}`; поле `client` для группы — заглушка `-1`
+4. Участники пишутся в `schedule_participant`; у группы `schedule.client_id` = NULL, `is_group = true`
 
 ### Предоплата (`process = add_money_in_accounting`)
 
@@ -136,7 +137,7 @@ port=5432
 
 Поля процесса: `process` (pipeline), `operation` (шаг). Callback'и смотрят на пару `(process, operation)` и на `call.data`.
 
-`callback_data` — id сущности: телефон клиента, `trains.id`, ISO-дата, время `HH:MM`. Служебные кнопки (`show_all_client_single`, `approve_add`, `prev_week`, …) — строки. Если id нет в текущем `list_*` (устаревшая кнопка) — выход без записи, без IndexError.
+`callback_data` — id сущности: `client.id`, `trains.id`, ISO-дата, время `HH:MM`. Служебные кнопки (`show_all_client_single`, `approve_add`, `prev_week`, …) — строки. Если id нет в текущем `list_*` (устаревшая кнопка) — выход без записи, без IndexError.
 
 Сброс: `sessions.clear(chat_id)` при `/start` и «В главное меню»; при входе в персональную/групповую запись и «Добавить оплату» — `clear(chat_id, process=...)`. Сброс затрагивает только этот чат.
 
@@ -144,7 +145,7 @@ port=5432
 
 - Репозиторий: `src/Kate_Fit_Notes/repository.py` (`PostgresRepository`). Соединения — пул в `src/Kate_Fit_Notes/db.py` (`with` + `putconn` в `finally`).
 - `sql.py` — тонкие обёртки с прежними именами функций; при импорте вызывает `load_settings()`.
-- Выборки возвращают `list[dict]`; пустой список — нет строк. Число строк — `len(rows)`, не `result[1]` / `result[2]`. `select_time_at_data` — список времён. INSERT/UPDATE — `None`.
+- Выборки возвращают `list[dict]`; пустой список — нет строк. Число строк — `len(rows)`, не `result[1]` / `result[2]`. `select_time_at_data` — список времён. `insert_client_data` — `RETURNING id`. Остальные INSERT/UPDATE — `None`.
 - Запросы с плейсхолдерами `%s` / `cursor.execute(sql, params)`. Логируется только `statusmessage`, не полный SQL с телефонами.
 - Тесты репозитория и сервисов импортируют `repository` / `db` и собирают его из `DATABASE_URL`. Не импортировать `sql.py`. `bot.py` можно импортировать в `tests/test_bot.py` (`create_bot` с фейковым репо).
 
@@ -203,7 +204,7 @@ uv run pytest tests/
 
 - Не коммитить токен бота, пароли, дампы `pg_db/`.
 - Не делать полноценный multi-user продукт сверх ключа `chat_id` (whitelist — этап 12).
-- Не менять смысл `client` = телефон и формат `client_list` `{1,2,3}` без миграции данных.
+- Не откатывать PK клиента на телефон и не возвращать `client_list` / `client = -1` без новой миграции.
 - Не писать новые фичи в `main.py` или пустой `pipelines.py`.
 - Не запускать `git push` и не менять git config без просьбы.
 - Не коммитить изменения `.idea/`, если пользователь не просил.

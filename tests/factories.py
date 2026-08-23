@@ -8,11 +8,19 @@ def make_client(conn, phone=9001112233, name="Тест", surname="Клиенто
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO main.client (phone, name, surname, add_time) "
-            "VALUES (%s, %s, %s, %s)",
+            "VALUES (%s, %s, %s, %s) RETURNING id",
             (phone, name, surname, added),
         )
+        row = cur.fetchone()
     conn.commit()
-    return {"phone": phone, "name": name, "surname": surname, "add_time": added}
+    return {
+        "id": row[0],
+        "client": row[0],
+        "phone": phone,
+        "name": name,
+        "surname": surname,
+        "add_time": added,
+    }
 
 
 def make_train(conn, type_train="Доп. персональная", group_train=False, rent_debt=0):
@@ -34,7 +42,7 @@ def make_train(conn, type_train="Доп. персональная", group_train=
 
 def make_schedule(
     conn,
-    client,
+    client_id,
     session_date=None,
     session_time=None,
     type_train="персональная",
@@ -42,15 +50,18 @@ def make_schedule(
     price=1000,
     rent_debt=0,
     is_group=False,
-    client_list=None,
+    participants=None,
+    accounting_id=None,
 ):
     session_date = session_date or date.today()
     session_time = session_time or time(10, 0)
+    if participants is None:
+        participants = [] if is_group or client_id is None else [client_id]
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO main.schedule "
-            "(price, spend, date, time, rent_debt, type_train, client, "
-            "client_list, is_group, type_train_id) "
+            "(price, spend, date, time, rent_debt, type_train, client_id, "
+            "is_group, type_train_id, accounting_id) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (
                 price,
@@ -59,19 +70,28 @@ def make_schedule(
                 session_time,
                 rent_debt,
                 type_train,
-                client,
-                client_list,
+                client_id,
                 is_group,
                 type_train_id,
+                accounting_id,
             ),
         )
         row = cur.fetchone()
+        schedule_id = row[0]
+        for participant_id in participants:
+            cur.execute(
+                "INSERT INTO main.schedule_participant "
+                "(schedule_id, client_id) VALUES (%s, %s)",
+                (schedule_id, participant_id),
+            )
     conn.commit()
     return {
-        "id": row[0],
-        "client": client,
+        "id": schedule_id,
+        "client_id": client_id,
         "date": session_date,
         "time": session_time,
+        "participants": list(participants),
+        "accounting_id": accounting_id,
     }
 
 

@@ -39,8 +39,13 @@ def _create_database_if_missing(url: str, dbname: str) -> None:
         admin.close()
 
 
-def _run_migrations(url: str) -> None:
-    """Пересоздаём schema main: ревизия 0001 переписана по дампу, тот же revision id."""
+def _alembic_config() -> Config:
+    cfg = Config(str(ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(ROOT / "alembic"))
+    return cfg
+
+
+def reset_schema(url: str) -> None:
     conn = psycopg2.connect(url)
     conn.autocommit = True
     try:
@@ -49,9 +54,17 @@ def _run_migrations(url: str) -> None:
             cur.execute("DROP TABLE IF EXISTS public.alembic_version")
     finally:
         conn.close()
-    cfg = Config(str(ROOT / "alembic.ini"))
-    cfg.set_main_option("script_location", str(ROOT / "alembic"))
-    command.upgrade(cfg, "head")
+
+
+def alembic_upgrade(url: str, revision: str = "head") -> None:
+    cfg = _alembic_config()
+    command.upgrade(cfg, revision)
+
+
+def _run_migrations(url: str) -> None:
+    """Пересоздаём schema main: 0001 as-is + 0002 модель сайта (upgrade head)."""
+    reset_schema(url)
+    alembic_upgrade(url, "head")
 
 
 @pytest.fixture(scope="session")

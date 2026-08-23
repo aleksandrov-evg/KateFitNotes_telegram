@@ -33,7 +33,7 @@ def select_time_at_data(date):
 def insert_in_schedule(
     date,
     client_id,
-    client_list,
+    participant_ids,
     time,
     rent_debt,
     type_train,
@@ -41,11 +41,12 @@ def insert_in_schedule(
     train_price,
     type_train_id,
     set_is_complete_true=False,
+    accounting_id=None,
 ):
     return repository.insert_in_schedule(
         date,
         client_id,
-        client_list,
+        participant_ids,
         time,
         rent_debt,
         type_train,
@@ -53,6 +54,7 @@ def insert_in_schedule(
         train_price,
         type_train_id,
         set_is_complete_true,
+        accounting_id,
     )
 
 
@@ -76,3 +78,7 @@ def get_count_prepaid_train(client_id, type_train_id):
 
 def get_last_price_for_train(client_id, type_train_id):
     return repository.get_last_price_for_train(client_id, type_train_id)
+
+
+def get_schedule_participants(schedule_id):
+    return repository.get_schedule_participants(schedule_id)

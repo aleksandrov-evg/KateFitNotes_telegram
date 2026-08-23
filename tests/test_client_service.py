@@ -31,11 +31,14 @@ class FakeClientRepo:
             raise self.raise_on_insert
         if phone_number in self.clients:
             raise UniqueViolation("duplicate key")
+        client_id = len(self.clients) + 1
         self.clients[phone_number] = {
+            "id": client_id,
             "phone": phone_number,
             "name": name,
             "surname": surname,
         }
+        return client_id
 
     def show_all_clients(self):
         return []
@@ -128,13 +131,15 @@ class TestCreateIntegration:
     def test_creates_normalized_row(self, service, db_conn):
         created = service.create("+79120001111", "Мария", "Петрова")
         assert created["phone"] == 9120001111
+        assert created["id"] is not None
         with db_conn.cursor() as cur:
             cur.execute(
-                "SELECT phone, name, surname FROM main.client WHERE phone = %s",
+                "SELECT id, phone, name, surname FROM main.client WHERE phone = %s",
                 (9120001111,),
             )
             row = cur.fetchone()
-        assert row == (9120001111, "Мария", "Петрова")
+        assert row[0] == created["id"]
+        assert row[1:] == (9120001111, "Мария", "Петрова")
 
     def test_duplicate_phone_does_not_insert_second_row(self, service, make_client, db_conn):
         make_client(phone=9120002222, name="Уже", surname="Есть")
@@ -160,19 +165,19 @@ class TestCreateIntegration:
 
 class TestListAll:
     def test_order_by_add_time_and_fields(self, service, make_client):
-        make_client(
+        first = make_client(
             phone=9110000001,
             name="Первая",
             surname="А",
             add_time=date(2024, 1, 1),
         )
-        make_client(
+        second = make_client(
             phone=9110000002,
             name="Вторая",
             surname="Б",
             add_time=date(2024, 1, 2),
         )
-        make_client(
+        third = make_client(
             phone=9110000003,
             name="Третья",
             surname="В",
@@ -180,7 +185,8 @@ class TestListAll:
         )
         rows = service.list_all()
         assert [row["name"] for row in rows] == ["Первая", "Вторая", "Третья"]
-        assert [row["client"] for row in rows] == [9110000001, 9110000002, 9110000003]
+        assert [row["phone"] for row in rows] == [9110000001, 9110000002, 9110000003]
+        assert [row["client"] for row in rows] == [first["id"], second["id"], third["id"]]
         assert "callback" not in rows[0]
 
 
@@ -192,15 +198,55 @@ class TestListRecent:
         newer = make_client(phone=9130000002, name="Позже")
         make_client(phone=9130000003, name="Без занятий")
         make_schedule(
-            client=older["phone"],
+            client_id=older["id"],
             session_date=date(2024, 5, 1),
             session_time=time(10, 0),
         )
         make_schedule(
-            client=newer["phone"],
+            client_id=newer["id"],
             session_date=date(2024, 6, 1),
             session_time=time(11, 0),
         )
         rows = service.list_recent()
-        assert [row["client"] for row in rows] == [9130000002, 9130000001]
+        assert [row["client"] for row in rows] == [newer["id"], older["id"]]
         assert [row["name"] for row in rows] == ["Позже", "Раньше"]
+
+    def test_group_participant_appears_in_recent(self, service, make_client, make_schedule):
+        visitor = make_client(phone=9130000010, name="Группа")
+        make_schedule(
+            client_id=None,
+            session_date=date(2024, 7, 1),
+            session_time=time(12, 0),
+            is_group=True,
+            participants=[visitor["id"]],
+        )
+        rows = service.list_recent()
+        assert [row["client"] for row in rows] == [visitor["id"]]
+
+    def test_phone_update_keeps_history(
+        self, service, make_client, make_schedule, make_accounting, db_conn
+    ):
+        client = make_client(phone=9130000020, name="Смена")
+        session = make_schedule(client_id=client["id"], session_date=date(2024, 8, 1))
+        package = make_accounting(client_id=client["id"], type_train_id=1)
+        with db_conn.cursor() as cur:
+            cur.execute(
+                "UPDATE main.client SET phone = %s WHERE id = %s",
+                (9990001111, client["id"]),
+            )
+        db_conn.commit()
+        with db_conn.cursor() as cur:
+            cur.execute(
+                "SELECT client_id FROM main.schedule_participant WHERE schedule_id = %s",
+                (session["id"],),
+            )
+            assert cur.fetchone()[0] == client["id"]
+            cur.execute(
+                "SELECT client_id FROM main.accounting WHERE id = %s",
+                (package["id"],),
+            )
+            assert cur.fetchone()[0] == client["id"]
+            cur.execute("SELECT phone FROM main.client WHERE id = %s", (client["id"],))
+            assert cur.fetchone()[0] == 9990001111
+        found = service.find_by_phone("89990001111")
+        assert found["id"] == client["id"]

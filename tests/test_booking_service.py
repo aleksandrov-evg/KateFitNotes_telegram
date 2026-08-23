@@ -1,4 +1,4 @@
-"""Автотесты BookingService: слот, предоплата, без client_multi.
+"""Автотесты BookingService: слот, предоплата, участники.
 
 Не импортирует bot.py и sql.py.
 """
@@ -13,7 +13,6 @@ from psycopg2.errors import UniqueViolation
 
 from src.Kate_Fit_Notes.repository import PostgresRepository
 from src.Kate_Fit_Notes.services.booking import BookingService
-from src.Kate_Fit_Notes.domain import GROUP_CLIENT_ID
 from src.Kate_Fit_Notes.services.errors import (
     EmptyParticipantsError,
     InvalidTrainTypeError,
@@ -68,7 +67,7 @@ class FakeBookingRepo:
         self,
         date,
         client_id,
-        client_list,
+        participant_ids,
         time,
         rent_debt,
         type_train,
@@ -76,6 +75,7 @@ class FakeBookingRepo:
         train_price,
         type_train_id,
         set_is_complete_true=False,
+        accounting_id=None,
     ):
         if self.raise_on_insert is not None:
             raise self.raise_on_insert
@@ -83,7 +83,7 @@ class FakeBookingRepo:
             (
                 date,
                 client_id,
-                client_list,
+                list(participant_ids or []),
                 time,
                 rent_debt,
                 type_train,
@@ -91,18 +91,22 @@ class FakeBookingRepo:
                 train_price,
                 type_train_id,
                 set_is_complete_true,
+                accounting_id,
             )
         )
         self.occupied.setdefault(date, []).append(time)
+        schedule_id = len(self.schedule_rows) + 1
         self.schedule_rows.append(
             {
+                "id": schedule_id,
                 "date": date,
                 "time": time,
-                "client": client_id,
-                "client_list": client_list,
+                "client_id": client_id,
+                "participant_ids": list(participant_ids or []),
                 "is_group": is_group,
                 "price": train_price,
                 "type_train_id": type_train_id,
+                "accounting_id": accounting_id,
             }
         )
 
@@ -111,6 +115,12 @@ class FakeBookingRepo:
             if row["date"] == date and row["time"] == time:
                 return row
         return None
+
+    def get_schedule_participants(self, schedule_id):
+        for row in self.schedule_rows:
+            if row["id"] == schedule_id:
+                return list(row.get("participant_ids") or [])
+        return []
 
     def get_active_prepaid_for_client(self, client_id, type_train_id):
         return list(self.prepaid)
@@ -140,14 +150,15 @@ class TestBookPersonalUnit:
     def test_occupies_slot_without_client_multi(self):
         fake = FakeBookingRepo()
         result = BookingService(fake).book_personal(
-            9001112233,
+            42,
             PERSONAL_TRAIN_ID,
             SESSION_DATE,
             SESSION_TIME,
             price=1000,
         )
-        assert result["client"] == 9001112233
-        assert fake.insert_calls[0][2] == "{9001112233}"
+        assert result["client"] == 42
+        assert fake.insert_calls[0][1] == 42
+        assert fake.insert_calls[0][2] == [42]
         assert fake.insert_calls[0][6] is False
         assert "client_multi" not in inspect.signature(BookingService.book_personal).parameters
         assert SESSION_TIME not in BookingService(fake).list_available_slots(SESSION_DATE)
@@ -155,12 +166,10 @@ class TestBookPersonalUnit:
     def test_repeat_same_datetime_refused(self):
         fake = FakeBookingRepo()
         service = BookingService(fake)
-        service.book_personal(
-            9001112233, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
-        )
+        service.book_personal(42, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000)
         with pytest.raises(SlotTakenError):
             service.book_personal(
-                9001112234, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1200
+                43, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1200
             )
         assert len(fake.insert_calls) == 1
 
@@ -169,14 +178,14 @@ class TestBookPersonalUnit:
         fake.raise_on_insert = UniqueViolation("duplicate key")
         with pytest.raises(SlotTakenError):
             BookingService(fake).book_personal(
-                9001112233, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
+                42, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
             )
 
     def test_group_train_refused(self):
         fake = FakeBookingRepo()
         with pytest.raises(InvalidTrainTypeError):
             BookingService(fake).book_personal(
-                9001112233, GROUP_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
+                42, GROUP_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
             )
         assert fake.insert_calls == []
 
@@ -186,9 +195,10 @@ class TestBookPersonalUnit:
             {"id": 11, "price_per_train": 1500, "count_train": 10},
         ]
         BookingService(fake).book_personal(
-            9001112233, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=None
+            42, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=None
         )
         assert fake.insert_calls[0][7] == 1500
+        assert fake.insert_calls[0][10] == 11
 
     def test_multiple_prepaid_refused(self):
         fake = FakeBookingRepo()
@@ -198,7 +208,7 @@ class TestBookPersonalUnit:
         ]
         with pytest.raises(MultiplePrepaidError) as exc:
             BookingService(fake).book_personal(
-                9001112233, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
+                42, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
             )
         assert exc.value.count == 2
         assert fake.insert_calls == []
@@ -208,14 +218,14 @@ class TestSuggestPriceUnit:
     def test_one_package_returns_prepaid_price(self):
         fake = FakeBookingRepo()
         fake.prepaid = [{"id": 11, "price_per_train": 1500, "count_train": 10}]
-        hint = BookingService(fake).suggest_personal_price(9001112233, PERSONAL_TRAIN_ID)
+        hint = BookingService(fake).suggest_personal_price(42, PERSONAL_TRAIN_ID)
         assert hint.prepaid_price == 1500
         assert hint.last_prices == []
 
     def test_no_package_returns_last_prices(self):
         fake = FakeBookingRepo()
         fake.last_prices = [{"price": 900}]
-        hint = BookingService(fake).suggest_personal_price(9001112233, PERSONAL_TRAIN_ID)
+        hint = BookingService(fake).suggest_personal_price(42, PERSONAL_TRAIN_ID)
         assert hint.prepaid_price is None
         assert hint.last_prices == [{"price": 900}]
 
@@ -226,7 +236,7 @@ class TestSuggestPriceUnit:
             {"id": 12, "price_per_train": 1600},
         ]
         with pytest.raises(MultiplePrepaidError):
-            BookingService(fake).suggest_personal_price(9001112233, PERSONAL_TRAIN_ID)
+            BookingService(fake).suggest_personal_price(42, PERSONAL_TRAIN_ID)
 
 
 class TestAvailableSlotsUnit:
@@ -251,30 +261,37 @@ class TestBookPersonalIntegration:
     def test_occupies_slot(self, service, make_client, db_conn):
         client = make_client(phone=9201112233)
         service.book_personal(
-            client["phone"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
+            client["id"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
         )
         with db_conn.cursor() as cur:
             cur.execute(
-                "SELECT client, time, price, is_group, client_list "
-                "FROM main.schedule WHERE date = %s AND client = %s",
-                (SESSION_DATE, client["phone"]),
+                "SELECT client_id, time, price, is_group "
+                "FROM main.schedule WHERE date = %s AND client_id = %s",
+                (SESSION_DATE, client["id"]),
             )
             row = cur.fetchone()
-        assert row[0] == client["phone"]
+            cur.execute(
+                "SELECT client_id FROM main.schedule_participant "
+                "WHERE schedule_id = (SELECT id FROM main.schedule "
+                "WHERE date = %s AND client_id = %s)",
+                (SESSION_DATE, client["id"]),
+            )
+            participants = [item[0] for item in cur.fetchall()]
+        assert row[0] == client["id"]
         assert row[1] == SESSION_TIME
         assert row[2] == 1000
         assert row[3] is False
-        assert list(row[4]) == [client["phone"]]
+        assert participants == [client["id"]]
 
     def test_repeat_same_datetime_refused(self, service, make_client, db_conn):
         first = make_client(phone=9201112234)
         second = make_client(phone=9201112235)
         service.book_personal(
-            first["phone"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
+            first["id"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
         )
         with pytest.raises(SlotTakenError):
             service.book_personal(
-                second["phone"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1200
+                second["id"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1200
             )
         with db_conn.cursor() as cur:
             cur.execute(
@@ -287,28 +304,30 @@ class TestBookPersonalIntegration:
         self, service, make_client, make_accounting, db_conn
     ):
         client = make_client(phone=9201112236)
-        make_accounting(
-            client_id=client["phone"],
+        package = make_accounting(
+            client_id=client["id"],
             type_train_id=PERSONAL_TRAIN_ID,
             price_per_train=1500,
             count_train=10,
         )
         service.book_personal(
-            client["phone"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=None
+            client["id"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=None
         )
         with db_conn.cursor() as cur:
             cur.execute(
-                "SELECT price FROM main.schedule WHERE client = %s",
-                (client["phone"],),
+                "SELECT price, accounting_id FROM main.schedule WHERE client_id = %s",
+                (client["id"],),
             )
-            assert cur.fetchone()[0] == 1500
+            row = cur.fetchone()
+        assert row[0] == 1500
+        assert row[1] == package["id"]
 
     def test_occupied_hour_not_in_available_slots(
         self, service, make_client, make_schedule
     ):
         client = make_client(phone=9201112237)
         make_schedule(
-            client=client["phone"],
+            client_id=client["id"],
             session_date=SESSION_DATE,
             session_time=SESSION_TIME,
             type_train_id=PERSONAL_TRAIN_ID,
@@ -320,25 +339,25 @@ class TestBookPersonalIntegration:
     def test_does_not_require_client_multi(self, service, make_client):
         client = make_client(phone=9201112238)
         service.book_personal(
-            client["phone"], PERSONAL_TRAIN_ID, SESSION_DATE, time(12, 0), price=800
+            client["id"], PERSONAL_TRAIN_ID, SESSION_DATE, time(12, 0), price=800
         )
         assert "client_multi" not in inspect.signature(service.book_personal).parameters
 
 
 class TestBookGroupUnit:
-    def test_writes_group_client_and_participant_list(self):
+    def test_writes_participants_without_group_stub(self):
         fake = FakeBookingRepo()
         result = BookingService(fake).book_group(
-            [9001112233, 9001112234],
+            [42, 43],
             GROUP_TRAIN_ID,
             SESSION_DATE,
             SESSION_TIME,
             price=2000,
         )
-        assert result["client"] == GROUP_CLIENT_ID
-        assert result["participants"] == [9001112233, 9001112234]
-        assert fake.insert_calls[0][1] == GROUP_CLIENT_ID
-        assert fake.insert_calls[0][2] == "{9001112233,9001112234}"
+        assert result["client"] is None
+        assert result["participants"] == [42, 43]
+        assert fake.insert_calls[0][1] is None
+        assert fake.insert_calls[0][2] == [42, 43]
         assert fake.insert_calls[0][6] is True
 
     def test_empty_list_refused_no_insert(self):
@@ -357,7 +376,7 @@ class TestBookGroupUnit:
         fake = FakeBookingRepo()
         with pytest.raises(InvalidTrainTypeError):
             BookingService(fake).book_group(
-                [9001112233], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=2000
+                [42], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=2000
             )
         assert fake.insert_calls == []
 
@@ -365,7 +384,7 @@ class TestBookGroupUnit:
         fake = FakeBookingRepo()
         service = BookingService(fake)
         service.book_group(
-            [9001112233, 9001112234],
+            [42, 43],
             GROUP_TRAIN_ID,
             SESSION_DATE,
             SESSION_TIME,
@@ -373,7 +392,7 @@ class TestBookGroupUnit:
         )
         with pytest.raises(SlotTakenError):
             service.book_personal(
-                9001112235, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
+                44, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
             )
         assert len(fake.insert_calls) == 1
 
@@ -383,25 +402,33 @@ class TestBookGroupIntegration:
         first = make_client(phone=9201112240)
         second = make_client(phone=9201112241)
         result = service.book_group(
-            [first["phone"], second["phone"]],
+            [first["id"], second["id"]],
             GROUP_TRAIN_ID,
             SESSION_DATE,
             SESSION_TIME,
             price=2000,
         )
-        assert result["client"] == GROUP_CLIENT_ID
-        assert result["participants"] == [first["phone"], second["phone"]]
+        assert result["client"] is None
+        assert result["participants"] == sorted([first["id"], second["id"]])
         with db_conn.cursor() as cur:
             cur.execute(
-                "SELECT client, is_group, client_list, price "
+                "SELECT client_id, is_group, price "
                 "FROM main.schedule WHERE date = %s AND time = %s",
                 (SESSION_DATE, SESSION_TIME),
             )
             row = cur.fetchone()
-        assert row[0] == GROUP_CLIENT_ID
+            cur.execute(
+                "SELECT client_id FROM main.schedule_participant "
+                "WHERE schedule_id = (SELECT id FROM main.schedule "
+                "WHERE date = %s AND time = %s) "
+                "ORDER BY client_id",
+                (SESSION_DATE, SESSION_TIME),
+            )
+            participants = [item[0] for item in cur.fetchall()]
+        assert row[0] is None
         assert row[1] is True
-        assert list(row[2]) == [first["phone"], second["phone"]]
-        assert row[3] == 2000
+        assert row[2] == 2000
+        assert participants == sorted([first["id"], second["id"]])
 
     def test_empty_list_does_not_occupy_slot(self, service, db_conn):
         with pytest.raises(EmptyParticipantsError):
@@ -422,7 +449,7 @@ class TestBookGroupIntegration:
         second = make_client(phone=9201112243)
         personal = make_client(phone=9201112244)
         service.book_group(
-            [first["phone"], second["phone"]],
+            [first["id"], second["id"]],
             GROUP_TRAIN_ID,
             SESSION_DATE,
             SESSION_TIME,
@@ -430,7 +457,7 @@ class TestBookGroupIntegration:
         )
         with pytest.raises(SlotTakenError):
             service.book_personal(
-                personal["phone"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
+                personal["id"], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000
             )
         with db_conn.cursor() as cur:
             cur.execute(
@@ -443,7 +470,7 @@ class TestBookGroupIntegration:
         client = make_client(phone=9201112245)
         with pytest.raises(InvalidTrainTypeError):
             service.book_group(
-                [client["phone"]], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=2000
+                [client["id"]], PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=2000
             )
         with db_conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM main.schedule")

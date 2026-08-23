@@ -6,7 +6,7 @@ class InvalidPhoneError(ValueError):
 
 
 class DuplicateClientError(ValueError):
-    """Клиент с таким телефоном уже есть (PK phone)."""
+    """Клиент с таким телефоном уже есть (UNIQUE phone)."""
 
 
 class SlotTakenError(ValueError):

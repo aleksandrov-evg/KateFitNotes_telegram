@@ -30,6 +30,7 @@ INSERT_TRAIN = (
 
 TRUNCATE_MAIN = """
 TRUNCATE TABLE
+    main.schedule_participant,
     main.client,
     main.trains,
     main.schedule,

@@ -9,7 +9,6 @@ from datetime import date, datetime, time
 
 import pytest
 
-from src.Kate_Fit_Notes.domain import GROUP_CLIENT_ID
 from src.Kate_Fit_Notes.repository import PostgresRepository
 from src.Kate_Fit_Notes.services.report import ReportService
 
@@ -92,7 +91,7 @@ class TestMonthlyIncomeIntegration:
     ):
         client = make_client(phone=9201112401)
         make_schedule(
-            client=client["phone"],
+            client_id=client["id"],
             session_date=date(2026, 8, 10),
             session_time=time(10, 0),
             type_train_id=PERSONAL_TRAIN_ID,
@@ -101,14 +100,14 @@ class TestMonthlyIncomeIntegration:
             is_group=False,
         )
         make_schedule(
-            client=GROUP_CLIENT_ID,
+            client_id=None,
             session_date=date(2026, 8, 10),
             session_time=time(11, 0),
             type_train_id=GROUP_TRAIN_ID,
             price=3000,
             rent_debt=500,
             is_group=True,
-            client_list=[client["phone"]],
+            participants=[client["id"]],
         )
         result = service.monthly_income(2026, 8)
         assert result["total_sum"] == 4000
@@ -128,7 +127,7 @@ class TestMonthlyIncomeIntegration:
     ):
         client = make_client(phone=9201112402)
         make_schedule(
-            client=client["phone"],
+            client_id=client["id"],
             session_date=date(2026, 8, 12),
             session_time=time(10, 0),
             type_train_id=PERSONAL_TRAIN_ID,
@@ -143,28 +142,28 @@ class TestMonthlyIncomeIntegration:
     def test_month_boundaries(self, service, make_client, make_schedule):
         client = make_client(phone=9201112403)
         make_schedule(
-            client=client["phone"],
+            client_id=client["id"],
             session_date=date(2026, 8, 1),
             session_time=time(10, 0),
             price=100,
             rent_debt=10,
         )
         make_schedule(
-            client=client["phone"],
+            client_id=client["id"],
             session_date=date(2026, 8, 31),
             session_time=time(11, 0),
             price=200,
             rent_debt=20,
         )
         make_schedule(
-            client=client["phone"],
+            client_id=client["id"],
             session_date=date(2026, 7, 31),
             session_time=time(10, 0),
             price=9999,
             rent_debt=1,
         )
         make_schedule(
-            client=client["phone"],
+            client_id=client["id"],
             session_date=date(2026, 9, 1),
             session_time=time(10, 0),
             price=8888,
