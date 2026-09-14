@@ -40,6 +40,26 @@ class FakeClientRepo:
         }
         return client_id
 
+    def get_client(self, client_id):
+        for row in self.clients.values():
+            if row.get("id") == client_id:
+                return dict(row)
+        return None
+
+    def list_clients(self, q, limit, offset):
+        items = [dict(row) for row in self.clients.values()]
+        if q:
+            needle = q.lower()
+            items = [
+                row
+                for row in items
+                if needle in str(row.get("name") or "").lower()
+                or needle in str(row.get("surname") or "").lower()
+                or needle in str(row.get("phone") or "")
+            ]
+        total = len(items)
+        return {"items": items[offset : offset + limit], "total": total}
+
     def show_all_clients(self):
         return []
 
@@ -250,3 +270,23 @@ class TestListRecent:
             assert cur.fetchone()[0] == 9990001111
         found = service.find_by_phone("89990001111")
         assert found["id"] == client["id"]
+
+
+class TestGetAndListPage:
+    def test_get_returns_row(self):
+        fake = FakeClientRepo()
+        ClientService(fake).create("89001112233", "Анна", "Иванова")
+        row = ClientService(fake).get(1)
+        assert row["name"] == "Анна"
+        assert ClientService(fake).get(99) is None
+
+    def test_list_page_limit_and_search(self):
+        fake = FakeClientRepo()
+        service = ClientService(fake)
+        service.create("89001110001", "Анна", "А")
+        service.create("89001110002", "Борис", "Б")
+        service.create("89001110003", "Антон", "В")
+        page = service.list_page(q="Ан", limit=1, offset=0)
+        assert page["total"] == 2
+        assert page["limit"] == 1
+        assert len(page["items"]) == 1

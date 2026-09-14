@@ -22,6 +22,10 @@ class KateFitRepository(Protocol):
         self, phone_number: Any, name: str = "None", surname: str = "None"
     ) -> int | None: ...
 
+    def get_client(self, client_id: Any) -> dict | None: ...
+
+    def list_clients(self, q: str | None, limit: int, offset: int) -> dict: ...
+
     def show_all_clients(self) -> list[dict]: ...
 
     def select_last_client(self, number_client: int = 0) -> list[dict]: ...
@@ -134,6 +138,35 @@ class PostgresRepository:
         if row is None:
             return None
         return int(row["id"])
+
+    def get_client(self, client_id: Any) -> dict | None:
+        rows = self._fetch_all(
+            "SELECT id, phone, name, surname, add_time FROM main.client WHERE id = %s",
+            (client_id,),
+        )
+        return rows[0] if rows else None
+
+    def list_clients(self, q: str | None, limit: int, offset: int) -> dict:
+        if q:
+            pattern = f"%{q}%"
+            where = (
+                "WHERE name ILIKE %s OR surname ILIKE %s OR CAST(phone AS TEXT) ILIKE %s"
+            )
+            params: tuple = (pattern, pattern, pattern)
+        else:
+            where = ""
+            params = ()
+        count_rows = self._fetch_all(
+            f"SELECT count(*) AS total FROM main.client {where}",
+            params,
+        )
+        total = int(count_rows[0]["total"]) if count_rows else 0
+        items = self._fetch_all(
+            f"SELECT id, phone, name, surname, add_time FROM main.client {where} "
+            "ORDER BY add_time, id LIMIT %s OFFSET %s",
+            params + (limit, offset),
+        )
+        return {"items": items, "total": total}
 
     def show_all_clients(self) -> list[dict]:
         return self._fetch_all(

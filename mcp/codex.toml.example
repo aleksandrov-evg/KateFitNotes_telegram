@@ -1,0 +1,8 @@
+# Скопируйте этот блок в ~/.codex/config.toml на машине, где работает Codex.
+# Сервер запускается только из корня KateFitNotes_telegram.
+# Подключение к БД настраивается один раз командами из mcp/registry.yaml.
+# Пароль в этом файле не хранится.
+
+[mcp_servers.kate_fit_notes_postgres]
+command = "bash"
+args = ["./mcp/run_postgres_mcp.sh"]

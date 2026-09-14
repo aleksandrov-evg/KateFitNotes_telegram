@@ -50,6 +50,28 @@ class ClientService:
         rows = self._repo.search_client(phone)
         return rows[0] if rows else None
 
+    def get(self, client_id: int) -> dict | None:
+        return self._repo.get_client(client_id)
+
+    def list_page(
+        self,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        page_limit = min(max(int(limit), 1), 100)
+        page_offset = max(int(offset), 0)
+        query = q.strip() if isinstance(q, str) else q
+        if not query:
+            query = None
+        page = self._repo.list_clients(query, page_limit, page_offset)
+        return {
+            "items": page["items"],
+            "total": page["total"],
+            "limit": page_limit,
+            "offset": page_offset,
+        }
+
     def list_recent(self, limit: int = 0) -> list[dict]:
         return self._repo.select_last_client(limit)
 

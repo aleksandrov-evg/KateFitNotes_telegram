@@ -16,6 +16,7 @@ MENU_REPORT = "💰 Отчет по тренировкам"
 MENU_PERSONAL = "➕🤸‍ Добавить перс. тренировку"
 MENU_GROUP = "➕👯 Добавить груп. тренировку"
 GREETING = "Привет, Катюнь! Что будем делать?"
+ACCESS_DENIED = "Нет доступа"
 
 
 def main_menu_markup() -> types.ReplyKeyboardMarkup:

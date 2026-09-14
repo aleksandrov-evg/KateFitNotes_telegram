@@ -74,9 +74,45 @@ services:
       TG_ACCOUNT: $TG_ACCOUNT
       TG_PASS: $TG_PASS
       TG_TOKEN: $TG_TOKEN
+      TG_ALLOWED_CHAT_IDS: $TG_ALLOWED_CHAT_IDS
       SQL_HOST: db_pg
       SQL_PORT: "5432"
       SQL_DATABASE: Kate_fitness
+    depends_on:
+      db_pg:
+        condition: service_healthy
+    networks:
+      - postgres
+
+  api:
+    image: telegram_bot:latest
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: kate_fit_api
+    restart: unless-stopped
+    command:
+      [
+        "uvicorn",
+        "src.Kate_Fit_Notes.api.app:app_from_env",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
+    environment:
+      TG_ACCOUNT: $TG_ACCOUNT
+      TG_PASS: $TG_PASS
+      TG_TOKEN: $TG_TOKEN
+      SQL_HOST: db_pg
+      SQL_PORT: "5432"
+      SQL_DATABASE: Kate_fitness
+      API_USER: $API_USER
+      API_PASSWORD: $API_PASSWORD
+      API_JWT_SECRET: $API_JWT_SECRET
+    ports:
+      - "8000:8000"
     depends_on:
       db_pg:
         condition: service_healthy

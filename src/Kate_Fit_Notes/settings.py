@@ -16,6 +16,10 @@ ENV_SQL_PASSWORD = "TG_PASS"
 ENV_SQL_DATABASE = "SQL_DATABASE"
 ENV_SQL_HOST = "SQL_HOST"
 ENV_SQL_PORT = "SQL_PORT"
+ENV_ALLOWED_CHAT_IDS = "TG_ALLOWED_CHAT_IDS"
+ENV_API_USER = "API_USER"
+ENV_API_PASSWORD = "API_PASSWORD"
+ENV_API_JWT_SECRET = "API_JWT_SECRET"
 
 
 class ConfigError(ValueError):
@@ -30,6 +34,10 @@ class Settings:
     sql_database: str
     sql_host: str
     sql_port: int
+    allowed_chat_ids: tuple[int, ...] = ()
+    api_user: str | None = None
+    api_password: str | None = None
+    api_jwt_secret: str | None = None
 
 
 def _env_value(env: Mapping[str, str], key: str) -> str | None:
@@ -72,6 +80,27 @@ def _read_ini(ini_path: Path) -> configparser.ConfigParser | None:
     parser = configparser.ConfigParser()
     parser.read(ini_path, encoding="utf-8")
     return parser
+
+
+def parse_allowed_chat_ids(raw: str | None) -> tuple[int, ...]:
+    """Список chat_id через запятую. Пусто — никого (бот никому не отвечает)."""
+    if raw is None:
+        return ()
+    stripped = str(raw).strip()
+    if not stripped:
+        return ()
+    ids: list[int] = []
+    for part in stripped.split(","):
+        item = part.strip()
+        if not item:
+            continue
+        try:
+            ids.append(int(item))
+        except ValueError as exc:
+            raise ConfigError(
+                f"TG_ALLOWED_CHAT_IDS должен быть списком целых, не {raw!r}"
+            ) from exc
+    return tuple(ids)
 
 
 def load_settings(
@@ -131,6 +160,11 @@ def load_settings(
     except ValueError as exc:
         raise ConfigError(f"SQL_PORT должен быть целым числом, не {sql_port_raw!r}") from exc
 
+    allowed_raw = _env_value(env, ENV_ALLOWED_CHAT_IDS)
+    api_user = _env_value(env, ENV_API_USER)
+    api_password = _env_value(env, ENV_API_PASSWORD)
+    api_jwt_secret = _env_value(env, ENV_API_JWT_SECRET)
+
     return Settings(
         telegram_token=token,
         sql_user=sql_user,
@@ -138,4 +172,8 @@ def load_settings(
         sql_database=sql_database,
         sql_host=sql_host,
         sql_port=sql_port,
+        allowed_chat_ids=parse_allowed_chat_ids(allowed_raw),
+        api_user=api_user,
+        api_password=api_password,
+        api_jwt_secret=api_jwt_secret,
     )

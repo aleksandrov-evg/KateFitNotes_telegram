@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from src.Kate_Fit_Notes.settings import ConfigError, load_settings
+from src.Kate_Fit_Notes.settings import ConfigError, load_settings, parse_allowed_chat_ids
 
 FULL_ENV = {
     "TG_TOKEN": "token-from-env",
@@ -49,6 +49,8 @@ class TestLoadSettingsFromEnv:
         assert settings.sql_database == "db-env"
         assert settings.sql_host == "host-env"
         assert settings.sql_port == 5433
+        assert settings.allowed_chat_ids == ()
+        assert settings.api_user is None
 
     def test_env_wins_over_ini(self, tmp_path: Path):
         ini = _write_ini(tmp_path)
@@ -105,3 +107,31 @@ class TestLoadSettingsErrors:
         env = {**FULL_ENV, "SQL_PORT": "abc"}
         with pytest.raises(ConfigError, match="SQL_PORT"):
             load_settings(environ=env, ini_path=tmp_path / "no-such.ini")
+
+
+class TestAllowedChatIds:
+    def test_empty_means_nobody(self):
+        assert parse_allowed_chat_ids(None) == ()
+        assert parse_allowed_chat_ids("") == ()
+        assert parse_allowed_chat_ids("  ") == ()
+
+    def test_comma_separated(self):
+        assert parse_allowed_chat_ids("1001, 2002") == (1001, 2002)
+
+    def test_invalid_value(self):
+        with pytest.raises(ConfigError, match="TG_ALLOWED_CHAT_IDS"):
+            parse_allowed_chat_ids("1001,abc")
+
+    def test_load_settings_reads_ids_and_api_fields(self, tmp_path: Path):
+        env = {
+            **FULL_ENV,
+            "TG_ALLOWED_CHAT_IDS": "11,22",
+            "API_USER": "admin",
+            "API_PASSWORD": "secret",
+            "API_JWT_SECRET": "jwt-secret",
+        }
+        settings = load_settings(environ=env, ini_path=tmp_path / "no-such.ini")
+        assert settings.allowed_chat_ids == (11, 22)
+        assert settings.api_user == "admin"
+        assert settings.api_password == "secret"
+        assert settings.api_jwt_secret == "jwt-secret"

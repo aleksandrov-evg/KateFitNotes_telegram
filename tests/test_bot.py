@@ -11,7 +11,9 @@ import telebot
 import bot as bot_module
 from bot import create_bot
 from src.Kate_Fit_Notes.bot_ui import (
+    ACCESS_DENIED,
     BACK_TO_MENU,
+    GREETING,
     MENU_ADD_PAYMENT,
     MENU_PERSONAL,
     MENU_REPORT,
@@ -25,6 +27,7 @@ from src.Kate_Fit_Notes.settings import Settings
 
 CHAT_A = 1001
 CHAT_B = 2002
+CHAT_STRANGER = 9999
 CLIENT = {"client": 42, "name": "Анна", "surname": "Иванова"}
 TRAIN = {"id": 1, "type_train": "силовая 1 чел", "group_train": False}
 SESSION_DATE = date(2026, 8, 24)
@@ -103,8 +106,17 @@ def make_call(chat_id, data):
     return SimpleNamespace(message=message, data=data)
 
 
-def make_app(repo=None, sessions=None):
-    app = create_bot(SETTINGS, repo or FakeBotRepo(), sessions or SessionStore())
+def make_app(repo=None, sessions=None, allowed_chat_ids=None):
+    app = create_bot(
+        SETTINGS,
+        repo or FakeBotRepo(),
+        sessions or SessionStore(),
+        allowed_chat_ids=(
+            frozenset({CHAT_A, CHAT_B})
+            if allowed_chat_ids is None
+            else frozenset(allowed_chat_ids)
+        ),
+    )
     app.bot.send_message = MagicMock()
     app.bot.delete_message = MagicMock()
     return app
@@ -214,3 +226,46 @@ def test_markup_callback_data_is_entity_id_not_index():
     assert day_buttons
     slot_markup = slots_markup([SESSION_TIME])
     assert slot_markup.keyboard[0][0].callback_data == "10:00"
+
+
+def test_stranger_start_does_not_clear_or_greet():
+    sessions = SessionStore()
+    sessions.clear(CHAT_A, "add_single_train_in_schedule")
+    app = make_app(sessions=sessions)
+    app.start(make_message(CHAT_STRANGER, "/start"))
+    texts = [call.args[1] for call in app.bot.send_message.call_args_list]
+    assert ACCESS_DENIED in texts
+    assert GREETING not in texts
+    assert app.sessions.get(CHAT_A).process == "add_single_train_in_schedule"
+
+
+def test_stranger_menu_does_not_call_services():
+    repo = FakeBotRepo()
+    app = make_app(repo)
+    app.client_service.create = MagicMock()
+    app.booking_service.book_personal = MagicMock()
+    app.report_service.monthly_report = MagicMock()
+    app.get_text_messages(make_message(CHAT_STRANGER, MENU_PERSONAL))
+    app.get_text_messages(make_message(CHAT_STRANGER, MENU_REPORT))
+    assert repo.select_last_client_calls == []
+    assert repo.income_calls == 0
+    app.client_service.create.assert_not_called()
+    app.booking_service.book_personal.assert_not_called()
+    app.report_service.monthly_report.assert_not_called()
+    texts = [call.args[1] for call in app.bot.send_message.call_args_list]
+    assert texts == [ACCESS_DENIED, ACCESS_DENIED]
+
+
+def test_stranger_callback_does_not_book():
+    app = make_app()
+    app.booking_service.book_personal = MagicMock()
+    state = app.sessions.clear(CHAT_STRANGER, "add_single_train_in_schedule")
+    state.operation = "confirm_add"
+    state.is_group = False
+    state.client = dict(CLIENT)
+    state.train = dict(TRAIN)
+    state.date = SESSION_DATE
+    state.time = SESSION_TIME
+    state.train_price = 1500
+    app.callback_inline(make_call(CHAT_STRANGER, "approve_add"))
+    app.booking_service.book_personal.assert_not_called()

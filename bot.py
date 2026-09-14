@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import telebot
 
 from src.Kate_Fit_Notes.bot_ui import (
+    ACCESS_DENIED,
     BACK_TO_MENU,
     GREETING,
     MENU_ADD_PAYMENT,
@@ -100,13 +101,23 @@ class BotApp:
     booking_service: BookingService
     prepaid_service: PrepaidService
     report_service: ReportService
+    allowed_chat_ids: frozenset[int] = frozenset()
 
     def register_handlers(self) -> None:
         self.bot.message_handler(commands=["start"])(self.start)
         self.bot.message_handler(content_types=["text", "contact"])(self.get_text_messages)
         self.bot.callback_query_handler(func=lambda call: True)(self.callback_inline)
 
+    def _is_allowed(self, chat_id: int) -> bool:
+        return chat_id in self.allowed_chat_ids
+
+    def _deny(self, chat_id: int) -> None:
+        self.bot.send_message(chat_id, ACCESS_DENIED)
+
     def start(self, message) -> None:
+        if not self._is_allowed(message.chat.id):
+            self._deny(message.chat.id)
+            return
         self.bot.send_message(message.chat.id, GREETING, reply_markup=main_menu_markup())
         self.sessions.clear(message.chat.id)
 
@@ -230,6 +241,9 @@ class BotApp:
         )
 
     def get_text_messages(self, message) -> None:
+        if not self._is_allowed(message.chat.id):
+            self._deny(message.chat.id)
+            return
         state = self.sessions.get(message.chat.id)
         if message.content_type == "contact":
             if state.allow_add_client:
@@ -363,6 +377,9 @@ class BotApp:
 
     def callback_inline(self, call) -> None:
         if not call.message:
+            return
+        if not self._is_allowed(call.message.chat.id):
+            self._deny(call.message.chat.id)
             return
         state = self.sessions.get(call.message.chat.id)
         process = state.process
@@ -559,7 +576,13 @@ def create_bot(
     settings: Settings,
     repository: KateFitRepository,
     sessions: SessionStore | None = None,
+    allowed_chat_ids: frozenset[int] | None = None,
 ) -> BotApp:
+    ids = (
+        frozenset(allowed_chat_ids)
+        if allowed_chat_ids is not None
+        else frozenset(settings.allowed_chat_ids)
+    )
     app = BotApp(
         bot=telebot.TeleBot(settings.telegram_token),
         sessions=sessions or SessionStore(),
@@ -567,6 +590,7 @@ def create_bot(
         booking_service=BookingService(repository),
         prepaid_service=PrepaidService(repository),
         report_service=ReportService(repository),
+        allowed_chat_ids=ids,
     )
     app.register_handlers()
     return app

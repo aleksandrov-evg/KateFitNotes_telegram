@@ -10,16 +10,20 @@
 
 - Python 3.14, менеджер пакетов [uv](https://docs.astral.sh/uv/)
 - [pyTelegramBotAPI](https://github.com/eternnoir/pyTelegramBotAPI) 4.7.1 (`telebot`)
+- FastAPI 0.141.1 + uvicorn 0.52.4 + PyJWT 2.13.0 (HTTP API)
 - PostgreSQL 14 (`psycopg2-binary` 2.9.12, импорт `psycopg2`)
 - Docker Compose (`postgres:14-alpine`, `dpage/pgadmin4`, образ бота на `uv` + Python 3.14)
 
-Точка входа: `uv run python bot.py` → `create_bot(...).bot.infinity_polling()` под `if __name__ == "__main__"`. `import bot` не стартует polling и не вызывает `load_settings()`. `main.py` — заглушка PyCharm, бот её не использует.
+Точка входа бота: `uv run python bot.py` → `create_bot(...).bot.infinity_polling()` под `if __name__ == "__main__"`. `import bot` не стартует polling и не вызывает `load_settings()`. `main.py` — заглушка PyCharm, бот её не использует.
+
+Точка входа API: `uv run uvicorn src.Kate_Fit_Notes.api.app:app_from_env --factory`. `create_app(settings, repository)` не требует живой Telegram. Сайт не начинать.
 
 ## Карта файлов
 
 ```
-bot.py                          # тонкий адаптер: create_bot, хендлеры без SQL
+bot.py                          # тонкий адаптер: create_bot, хендлеры без SQL, whitelist chat_id
 sql.py                          # тонкие обёртки над PostgresRepository
+src/Kate_Fit_Notes/api/               # FastAPI: create_app, JWT, роуты поверх сервисов
 src/Kate_Fit_Notes/settings.py        # конфиг: env, fallback config.ini
 src/Kate_Fit_Notes/db.py              # пул соединений PostgreSQL
 src/Kate_Fit_Notes/repository.py      # параметризованные запросы, list[dict]
@@ -30,7 +34,7 @@ tests/                          # автотесты (pytest), не корнев
 alembic/                        # миграции схемы main.* as-is
 backups/kate_fitness_schema.sql # DDL Kate_fitness без данных (кластерный дамп в gitignore)
 dockerfile                      # образ бота
-docker-compose.yml              # pg_db :5432, pg_db_test :5433, pgadmin :5050, tg_bot
+docker-compose.yml              # pg_db :5432, pg_db_test :5433, pgadmin :5050, tg_bot, api :8000
 config.ini                      # не в git: TOKEN и параметры SQL
 pyproject.toml                  # runtime и dev-зависимости
 uv.lock                         # зафиксированные версии
@@ -43,6 +47,10 @@ uv.lock                         # зафиксированные версии
 ## Конфигурация
 
 Один источник: **env**. Локальный `config.ini` — fallback, если переменной нет. Env побеждает ini. Файл ini не обязателен, если env полный. Загрузка: `src/Kate_Fit_Notes/settings.py` (`load_settings`).
+
+## MCP для агентов
+
+Реестр доступных MCP-серверов хранится в `mcp/registry.yaml`; готовые фрагменты конфигурации Codex — в `mcp/`. MCP PostgreSQL запускается только из корня этого репозитория через `mcp/run_postgres_mcp.sh`. Перед использованием MCP агент сверяет назначение и ограничения в реестре. В Git попадают только несекретные параметры подключения и имена переменных; значения ключей, токенов и паролей остаются в локальном `.env` или системной связке ключей.
 
 `config.ini` (локальный, в `.gitignore`):
 
@@ -65,6 +73,10 @@ port=5432
 | Переменная | Назначение | Fallback ini |
 |------------|------------|--------------|
 | `TG_TOKEN` | токен Telegram-бота | `[main] TOKEN` |
+| `TG_ALLOWED_CHAT_IDS` | whitelist `chat_id` через запятую; пусто — никто | — |
+| `API_USER` | логин HTTP API (JWT) | — |
+| `API_PASSWORD` | пароль HTTP API | — |
+| `API_JWT_SECRET` | секрет подписи JWT | — |
 | `TG_ACCOUNT` | пользователь PostgreSQL (`POSTGRES_USER`) | `[sql] user` |
 | `TG_PASS` | пароль PostgreSQL и pgAdmin | `[sql] password` |
 | `TG_EMAIL` | логин pgAdmin (`PGADMIN_DEFAULT_EMAIL`) | — |
@@ -73,7 +85,7 @@ port=5432
 | `SQL_PORT` | порт БД бота | `[sql] port` |
 | `DATABASE_URL` | URL тестовой БД для pytest / Alembic (порт 5433, имя `*_test`) | — |
 
-В compose у `tg_bot` задаются `SQL_HOST=db_pg`, `SQL_PORT=5432`, `SQL_DATABASE=Kate_fitness`. Postgres: `POSTGRES_DB=Kate_fitness` (прод) и `Kate_fitness_test` (тест), healthcheck `pg_isready`, бот ждёт `service_healthy`.
+В compose у `tg_bot` и `api` задаются `SQL_HOST=db_pg`, `SQL_PORT=5432`, `SQL_DATABASE=Kate_fitness`. Postgres: `POSTGRES_DB=Kate_fitness` (прод) и `Kate_fitness_test` (тест), healthcheck `pg_isready`, бот и API ждут `service_healthy`. API слушает `:8000`. Пустой `TG_ALLOWED_CHAT_IDS` — бот никому не отвечает.
 
 Тестовая БД: контейнер `pg_db_test`, порт хоста `5433`, имя `Kate_fitness_test` (`DATABASE_URL`). Pytest отказывается подключаться к `Kate_fitness` и к порту `5432`. Pytest **не** подхватывает `.env` сам — `DATABASE_URL` нужно экспортировать.
 
@@ -97,7 +109,7 @@ port=5432
 
 ## Сценарии бота
 
-Бот рассчитан на **одного пользователя** (whitelist — этап 12). Состояние сценария ключуется `chat_id` (`SessionStore`), не глобальный синглтон.
+Бот рассчитан на **одного пользователя**: whitelist `TG_ALLOWED_CHAT_IDS`. Чат не из списка получает «Нет доступа», сервисы не вызываются. Состояние сценария ключуется `chat_id` (`SessionStore`), не глобальный синглтон.
 
 Главное меню (`/start` и кнопка «🔙 В главное меню»):
 
@@ -151,7 +163,7 @@ port=5432
 
 Типичные функции:
 
-- клиенты: `search_client`, `insert_client_data`, `show_all_clients`, `select_last_client`
+- клиенты: `search_client`, `insert_client_data`, `get_client`, `list_clients`, `show_all_clients`, `select_last_client`
 - тренировки: `list_all_train(group: bool)`
 - расписание: `select_time_at_data`, `insert_in_schedule`
 - предоплата: `insert_in_accounting`, `get_active_prepaid_for_client`, `get_count_prepaid_train`, `get_last_price_for_train`
@@ -164,6 +176,8 @@ port=5432
 ```bash
 uv sync
 uv run python bot.py
+# HTTP API (нужны API_USER / API_PASSWORD / API_JWT_SECRET):
+uv run uvicorn src.Kate_Fit_Notes.api.app:app_from_env --factory --host 127.0.0.1 --port 8000
 ```
 
 Инфраструктура:
@@ -173,6 +187,7 @@ docker compose up -d db_pg pgadmin
 docker compose build tg_bot
 # или: docker build -t telegram_bot:latest .
 docker compose up -d tg_bot
+docker compose up -d api
 ```
 
 pgAdmin: `http://localhost:5050`. Postgres: `localhost:5432` (прод-данные), `localhost:5433` (тест).
@@ -186,7 +201,7 @@ docker compose up -d db_pg_test
 uv run pytest tests/
 ```
 
-Без `DATABASE_URL` DB-тесты скипаются. Живой Telegram-токен для `pytest tests/` не нужен: `import bot` не вызывает `load_settings()`. Остальные тесты не импортируют `sql.py`. Тесты репозитория: `PostgresRepository.from_dsn(DATABASE_URL)`. Тесты адаптера: `create_bot(settings, fake_repo)` в `tests/test_bot.py`.
+Без `DATABASE_URL` DB-тесты скипаются. Живой Telegram-токен для `pytest tests/` не нужен: `import bot` не вызывает `load_settings()`. Остальные тесты не импортируют `sql.py`. Тесты репозитория: `PostgresRepository.from_dsn(DATABASE_URL)`. Тесты адаптера: `create_bot(settings, fake_repo)` в `tests/test_bot.py`. Тесты API: `create_app(settings, fake_repo)` в `tests/test_api.py` (`TestClient`, без polling).
 
 ## Соглашения по коду
 
@@ -203,7 +218,7 @@ uv run pytest tests/
 ## Чего не делать
 
 - Не коммитить токен бота, пароли, дампы `pg_db/`.
-- Не делать полноценный multi-user продукт сверх ключа `chat_id` (whitelist — этап 12).
+- Не делать полноценный multi-user продукт сверх ключа `chat_id` и whitelist.
 - Не откатывать PK клиента на телефон и не возвращать `client_list` / `client = -1` без новой миграции.
 - Не писать новые фичи в `main.py` или пустой `pipelines.py`.
 - Не запускать `git push` и не менять git config без просьбы.
@@ -217,3 +232,4 @@ uv run pytest tests/
 | Новый шаг сценария | методы `show_*` + ветка в `callback_inline` |
 | Новая выборка/запись | метод в `repository.py` и сервисе; хендлер только вызывает сервис |
 | Поля состояния сценария | `ScenarioState` / `SessionStore` в `session.py` |
+| HTTP API | `src/Kate_Fit_Notes/api/`, `create_app`; не писать SQL в роутах |
