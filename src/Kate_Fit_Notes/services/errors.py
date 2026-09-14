@@ -1,0 +1,34 @@
+"""Ошибки сценариев сервисов. Не путать валидацию с уникальностью."""
+
+
+class InvalidPhoneError(ValueError):
+    """Телефон не нормализуется в 10 цифр."""
+
+
+class DuplicateClientError(ValueError):
+    """Клиент с таким телефоном уже есть (UNIQUE phone)."""
+
+
+class SlotTakenError(ValueError):
+    """Дата и время уже заняты в расписании."""
+
+
+class InvalidTrainTypeError(ValueError):
+    """Тип тренировки не подходит для сценария записи."""
+
+
+class EmptyParticipantsError(ValueError):
+    """В групповую запись не передали ни одного участника."""
+
+
+class InvalidPrepaidError(ValueError):
+    """Некорректные сумма или количество тренировок пакета."""
+
+
+class MultiplePrepaidError(ValueError):
+    """У клиента больше одного незакрытого пакета предоплаты."""
+
+    def __init__(self, count: int, ids: list):
+        self.count = count
+        self.ids = ids
+        super().__init__(f"у клиента {count} незакрытых предоплат")

@@ -1,0 +1,39 @@
+# Реестр MCP-серверов, разрешённых для агентов этого репозитория.
+#
+# Вносите сюда только несекретные сведения: назначение, команды запуска,
+# идентификаторы и имена переменных окружения. Значения токенов, паролей и
+# ключей хранятся исключительно в локальном .env (он игнорируется Git).
+#
+# При добавлении сервера укажите:
+# - id: стабильный идентификатор в snake_case;
+# - purpose: какую задачу решает сервер в этом проекте;
+# - transport: stdio, http или sse;
+# - command/endpoint: способ подключения без секретов;
+# - required_env: имена обязательных переменных окружения;
+# - allowed_for: какие агенты или сценарии могут его использовать.
+
+version: 1
+servers:
+  - id: kate_fit_notes_postgres
+    purpose: Просмотр схемы и данных PostgreSQL для диагностики и разработки.
+    transport: stdio
+    package: "@microsoft/postgres-mcp"
+    command: npx
+    args:
+      - -y
+      - "@microsoft/postgres-mcp"
+      - run
+    profile: kate_fit_notes_readonly
+    access_mode: ro
+    required_env:
+      - MCP_DB_USER
+      - MCP_DB_PASSWORD
+    allowed_for:
+      - agents
+      - local_development
+    setup:
+      - ./mcp/setup_postgres_mcp.sh
+    notes: >-
+      Скрипт читает MCP_DB_USER и MCP_DB_PASSWORD из локального .env,
+      а затем сохраняет пароль в системной связке ключей.
+      Для профиля нужен пользователь БД с правами только на чтение.
