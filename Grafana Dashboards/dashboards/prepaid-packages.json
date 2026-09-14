@@ -12,6 +12,7 @@
   ],
   "refresh":"5m", "schemaVersion":41, "tags":["kate-fit-notes","предоплаты","пакеты"],
   "templating":{"list":[
+    {"type":"custom","name":"location","label":"Место проведения","query":"Все : .* , home : home, ter_fit : ter_fit","current":{"text":"Все","value":".*","selected":true},"options":[{"text":"Все","value":".*","selected":true},{"text":"home","value":"home","selected":false},{"text":"ter_fit","value":"ter_fit","selected":false}],"multi":false,"includeAll":false,"hide":0},
     {"type":"query","name":"training_type","label":"Тип тренировки","datasource":{"type":"postgres","uid":"bfxxeavvzooaoc"},"query":"SELECT DISTINCT type_train FROM main.trains WHERE type_train IS NOT NULL ORDER BY 1","definition":"SELECT DISTINCT type_train FROM main.trains WHERE type_train IS NOT NULL ORDER BY 1","refresh":1,"includeAll":true,"allValue":".*","multi":true,"current":{"text":"Все","value":"$__all","selected":true},"options":[]},
     {"type":"custom","name":"stale_days","label":"Пакет давно открыт, дней","query":"60,90,120","current":{"text":"90","value":"90","selected":true},"options":[{"text":"60","value":"60","selected":false},{"text":"90","value":"90","selected":true},{"text":"120","value":"120","selected":false}]},
     {"type":"custom","name":"low_balance_sessions","label":"Малый остаток, занятий","query":"1,2,3","current":{"text":"2","value":"2","selected":true},"options":[{"text":"1","value":"1","selected":false},{"text":"2","value":"2","selected":true},{"text":"3","value":"3","selected":false}]}
