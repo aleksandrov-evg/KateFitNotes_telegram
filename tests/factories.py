@@ -23,12 +23,18 @@ def make_client(conn, phone=9001112233, name="Тест", surname="Клиенто
     }
 
 
-def make_train(conn, type_train="Доп. персональная", group_train=False, rent_debt=0):
+def make_train(
+    conn,
+    type_train="Доп. персональная",
+    group_train=False,
+    rent_debt=0,
+    location="ter_fit",
+):
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO main.trains (type_train, group_train, rent_debt) "
-            "VALUES (%s, %s, %s) RETURNING id",
-            (type_train, group_train, rent_debt),
+            "INSERT INTO main.trains (type_train, group_train, rent_debt, location) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (type_train, group_train, rent_debt, location),
         )
         row = cur.fetchone()
     conn.commit()
@@ -37,6 +43,7 @@ def make_train(conn, type_train="Доп. персональная", group_train=
         "type_train": type_train,
         "group_train": group_train,
         "rent_debt": rent_debt,
+        "location": location,
     }
 
 

@@ -96,7 +96,7 @@ port=5432
 | Таблица | Назначение | Ключевые поля |
 |--------------------|------------|-----------------------------|
 | `main.client` | клиенты | PK `id`, UNIQUE `phone`, `name`, `surname`, `add_time`, `inactive` |
-| `main.trains` | типы тренировок | PK `id`, `type_train`, `group_train`, `rent_debt`, `date` |
+| `main.trains` | типы тренировок | PK `id`, `type_train`, `group_train`, `rent_debt`, `date`, `location` (`home` / `ter_fit`) |
 | `main.schedule` | записи занятий | PK `id`, UNIQUE `(date, time)`, `client_id` (NULL у группы), `accounting_id`, `studio`, `price real`, `spend`, `add_time`, `type_train_id` |
 | `main.schedule_participant` | участники занятия | PK `(schedule_id, client_id)`, FK на `schedule` и `client` |
 | `main.accounting` | предоплаты | PK `id` IDENTITY, `client_id` → `client.id`, `summ`, `count_train`, `price_per_train`, `type_train_id`, `is_complete`, `type_action`, `comment`, `created_at`, `updated_at` |
