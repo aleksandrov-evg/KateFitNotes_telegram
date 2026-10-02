@@ -1,0 +1,76 @@
+# Деплой Telegram-бота и HTTP API (локально и Dokploy).
+#
+# Dokploy:
+#   Compose Type = Docker Compose
+#   Compose Path = ./docker-compose.bot.yml
+#   Domain вешать на сервис api, порт 8000
+#   Env: TG_* / API_* / SQL_* (см. .env.example)
+#
+# Перед деплоем бота сеть БД уже должна существовать
+# (поднять docker-compose.db.yml или создать вручную):
+#   docker network create --driver bridge \
+#     --subnet=172.18.0.0/16 katefitnotes_postgres
+#
+# Локально без Dokploy нужна и сеть Traefik-совместимости:
+#   docker network create dokploy-network
+#
+# Затем:
+#   docker compose -f docker-compose.bot.yml up -d --build
+
+services:
+  tg_bot:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: telegram_bot:latest
+    restart: always
+    environment:
+      TG_ACCOUNT: ${TG_ACCOUNT}
+      TG_PASS: ${TG_PASS}
+      TG_TOKEN: ${TG_TOKEN}
+      TG_ALLOWED_CHAT_IDS: ${TG_ALLOWED_CHAT_IDS}
+      SQL_HOST: ${SQL_HOST:-db_pg}
+      SQL_PORT: ${SQL_PORT:-5432}
+      SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}
+    networks:
+      - postgres
+      - dokploy-network
+
+  api:
+    image: telegram_bot:latest
+    build:
+      context: .
+      dockerfile: dockerfile
+    restart: unless-stopped
+    command:
+      [
+        "uvicorn",
+        "src.Kate_Fit_Notes.api.app:app_from_env",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
+    environment:
+      TG_ACCOUNT: ${TG_ACCOUNT}
+      TG_PASS: ${TG_PASS}
+      TG_TOKEN: ${TG_TOKEN}
+      SQL_HOST: ${SQL_HOST:-db_pg}
+      SQL_PORT: ${SQL_PORT:-5432}
+      SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}
+      API_USER: ${API_USER}
+      API_PASSWORD: ${API_PASSWORD}
+      API_JWT_SECRET: ${API_JWT_SECRET}
+    expose:
+      - "8000"
+    networks:
+      - postgres
+      - dokploy-network
+
+networks:
+  postgres:
+    external: true
+    name: katefitnotes_postgres
+  dokploy-network:
+    external: true

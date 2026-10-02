@@ -25,24 +25,34 @@ def test_dockerfile_does_not_copy_secrets_or_broken_tests():
 
 
 def test_compose_uses_postgres_db_not_typo():
-    text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    text = (ROOT / "docker-compose.db.yml").read_text(encoding="utf-8")
     assert "POSTGRESS_DB" not in text
     assert "POSTGRES_DB: Kate_fitness" in text
     assert "POSTGRES_DB: Kate_fitness_test" in text
 
 
-def test_compose_postgres_healthcheck_and_bot_waits():
-    text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+def test_compose_db_healthcheck_and_named_network():
+    text = (ROOT / "docker-compose.db.yml").read_text(encoding="utf-8")
     assert "healthcheck:" in text
     assert "pg_isready" in text
-    assert "condition: service_healthy" in text
-    assert "TG_TOKEN: $TG_TOKEN" in text
-    assert "SQL_HOST: db_pg" in text
-    assert "SQL_DATABASE: Kate_fitness" in text
-    assert "TG_ALLOWED_CHAT_IDS: $TG_ALLOWED_CHAT_IDS" in text
-    assert "8000:8000" in text
+    assert "name: katefitnotes_postgres" in text
+
+
+def test_compose_bot_is_dokploy_ready():
+    text = (ROOT / "docker-compose.bot.yml").read_text(encoding="utf-8")
+    assert "TG_TOKEN: ${TG_TOKEN}" in text
+    assert "SQL_HOST: ${SQL_HOST:-db_pg}" in text
+    assert "SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}" in text
+    assert "TG_ALLOWED_CHAT_IDS: ${TG_ALLOWED_CHAT_IDS}" in text
     assert "app_from_env" in text
-    assert "API_JWT_SECRET: $API_JWT_SECRET" in text
+    assert "API_JWT_SECRET: ${API_JWT_SECRET}" in text
+    assert "expose:" in text
+    assert '"8000"' in text
+    assert "8000:8000" not in text
+    assert "container_name:" not in text
+    assert "dokploy-network" in text
+    assert "name: katefitnotes_postgres" in text
+    assert text.count("external: true") >= 2
 
 
 def test_env_example_documents_token_and_test_db():
