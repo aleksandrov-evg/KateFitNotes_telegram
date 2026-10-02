@@ -17,13 +17,13 @@ Compose разделён на два файла:
 | `api` | FastAPI | 8000 |
 | `pgadmin` | административный интерфейс PostgreSQL | 5050 |
 
-Общие Docker-сети бота: `katefitnotes_postgres` (БД) и `dokploy-network`
-(Traefik/Dokploy). Обе для bot-файла — `external`.
+Сеть бота: только `dokploy-network` (`external`, Traefik/Dokploy).
+К БД бот ходит по `SQL_HOST` (отдельный деплой Postgres, общая Docker-сеть
+не требуется).
 
-Запуск рабочей базы, затем бота и API:
+Запуск (БД уже доступна по `SQL_HOST`):
 
 ```bash
-docker compose -f docker-compose.db.yml up -d db_pg
 docker network create dokploy-network 2>/dev/null || true
 docker compose -f docker-compose.bot.yml up -d --build
 docker compose -f docker-compose.bot.yml ps
@@ -37,16 +37,15 @@ docker compose -f docker-compose.bot.yml exec api \
   python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())"
 ```
 
-PostgreSQL имеет health-check. Бот и API поднимайте после готовности `db_pg`
-(`restart: always` / `unless-stopped` перезапустят приложение, если БД ещё
-не была готова). Миграции Compose не запускает автоматически.
+Бот и API требуют reachable Postgres по `SQL_HOST`. Миграции Compose
+не запускает автоматически.
 
 ## Dokploy
 
-1. Отдельный Compose для БД (`docker-compose.db.yml`) или уже существующий
-   Postgres в сети `katefitnotes_postgres`.
+1. Postgres уже задеплоен отдельно и доступен с хоста/сети приложения.
 2. Compose для приложения: Path `./docker-compose.bot.yml`.
-3. Env: `TG_*`, `API_*`, `SQL_HOST` (обычно `db_pg`), `SQL_PORT`, `SQL_DATABASE`.
+3. Env: `TG_*`, `API_*`, обязательный `SQL_HOST` (IP или hostname БД),
+   `SQL_PORT`, `SQL_DATABASE`.
 4. Domain в UI на сервис `api`, port `8000`.
 5. Не задавайте `container_name` вручную — в bot-файле его нет специально.
 

@@ -78,16 +78,16 @@ openssl rand -hex 32
 
 ## Первый запуск
 
-Сначала поднимите базу, затем бота и API (отдельные compose-файлы):
+БД деплоится отдельно. В env задайте `SQL_HOST` на reachable Postgres,
+затем поднимите бота и API:
 
 ```bash
-docker compose -f docker-compose.db.yml up -d db_pg
 docker network create dokploy-network 2>/dev/null || true
 docker compose -f docker-compose.bot.yml up -d --build
 ```
 
 В Dokploy укажите Compose Path `./docker-compose.bot.yml`, domain на сервис
-`api` (порт `8000`), в env задайте `SQL_HOST=db_pg` (или hostname вашей БД).
+`api` (порт `8000`), в env задайте `SQL_HOST` (IP или hostname вашей БД).
 
 Проверьте состояние и журналы:
 

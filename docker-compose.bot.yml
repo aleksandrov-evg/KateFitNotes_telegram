@@ -6,12 +6,10 @@
 #   Domain вешать на сервис api, порт 8000
 #   Env: TG_* / API_* / SQL_* (см. .env.example)
 #
-# Перед деплоем бота сеть БД уже должна существовать
-# (поднять docker-compose.db.yml или создать вручную):
-#   docker network create --driver bridge \
-#     --subnet=172.18.0.0/16 katefitnotes_postgres
+# БД деплоится отдельно. Укажите SQL_HOST / SQL_PORT / SQL_DATABASE
+# на reachable-хост Postgres (IP, hostname сервиса в общей сети и т.п.).
 #
-# Локально без Dokploy нужна и сеть Traefik-совместимости:
+# Локально без Dokploy нужна сеть Traefik-совместимости:
 #   docker network create dokploy-network
 #
 # Затем:
@@ -29,11 +27,10 @@ services:
       TG_PASS: ${TG_PASS}
       TG_TOKEN: ${TG_TOKEN}
       TG_ALLOWED_CHAT_IDS: ${TG_ALLOWED_CHAT_IDS}
-      SQL_HOST: ${SQL_HOST:-db_pg}
+      SQL_HOST: ${SQL_HOST:?SQL_HOST is required}
       SQL_PORT: ${SQL_PORT:-5432}
       SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}
     networks:
-      - postgres
       - dokploy-network
 
   api:
@@ -56,7 +53,7 @@ services:
       TG_ACCOUNT: ${TG_ACCOUNT}
       TG_PASS: ${TG_PASS}
       TG_TOKEN: ${TG_TOKEN}
-      SQL_HOST: ${SQL_HOST:-db_pg}
+      SQL_HOST: ${SQL_HOST:?SQL_HOST is required}
       SQL_PORT: ${SQL_PORT:-5432}
       SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}
       API_USER: ${API_USER}
@@ -65,12 +62,8 @@ services:
     expose:
       - "8000"
     networks:
-      - postgres
       - dokploy-network
 
 networks:
-  postgres:
-    external: true
-    name: katefitnotes_postgres
   dokploy-network:
     external: true

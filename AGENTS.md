@@ -86,7 +86,7 @@ port=5432
 | `SQL_PORT` | порт БД бота | `[sql] port` |
 | `DATABASE_URL` | URL тестовой БД для pytest / Alembic (порт 5433, имя `*_test`) | — |
 
-Compose разделён: `docker-compose.db.yml` (БД/pgAdmin) и `docker-compose.bot.yml` (бот/API, Dokploy-ready). Сети бота: `katefitnotes_postgres` и `dokploy-network` (обе `external`). `SQL_HOST`/`SQL_PORT`/`SQL_DATABASE` из env (дефолт `db_pg` / `5432` / `Kate_fitness`). Без `container_name`; API только `expose: 8000`. Postgres: `POSTGRES_DB=Kate_fitness` (прод) и `Kate_fitness_test` (тест), healthcheck `pg_isready`. Сначала БД, затем бот/API. Пустой `TG_ALLOWED_CHAT_IDS` — бот никому не отвечает.
+Compose разделён: `docker-compose.db.yml` (БД/pgAdmin) и `docker-compose.bot.yml` (бот/API, Dokploy-ready). Бот подключается к отдельно задеплоенной БД по `SQL_HOST`/`SQL_PORT`/`SQL_DATABASE` (обязательный `SQL_HOST`, порт по умолчанию `5432`, БД `Kate_fitness`). Сеть бота: только `dokploy-network` (`external`). Без `container_name`; API только `expose: 8000`. Postgres в db-compose: `POSTGRES_DB=Kate_fitness` (прод) и `Kate_fitness_test` (тест), healthcheck `pg_isready`, сеть `katefitnotes_postgres` только у БД. Пустой `TG_ALLOWED_CHAT_IDS` — бот никому не отвечает.
 
 Тестовая БД: контейнер `pg_db_test`, порт хоста `5433`, имя `Kate_fitness_test` (`DATABASE_URL`). Pytest отказывается подключаться к `Kate_fitness` и к порту `5432`. Pytest **не** подхватывает `.env` сам — `DATABASE_URL` нужно экспортировать.
 
