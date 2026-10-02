@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, datetime, time
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +28,8 @@ class ClientOut(BaseModel):
     phone: int
     name: str
     surname: str
+    inactive: bool | None = None
+    add_time: date | None = None
 
 
 class ClientPage(BaseModel):
@@ -42,6 +44,7 @@ class TrainTypeOut(BaseModel):
     type_train: str
     group_train: bool
     rent_debt: float | None = None
+    location: str | None = None
 
 
 class SlotListOut(BaseModel):
@@ -66,13 +69,24 @@ class GroupBookingIn(BaseModel):
 
 
 class BookingOut(BaseModel):
+    id: int | None = None
     client: int | None = None
     participants: list[int] | None = None
     date: date
     time: time
     price: float | None = None
+    rent_debt: float | None = None
     type_train_id: int
     accounting_id: int | None = None
+    is_group: bool | None = None
+    add_time: datetime | None = None
+
+
+class BookingPage(BaseModel):
+    items: list[BookingOut]
+    total: int
+    limit: int
+    offset: int
 
 
 class PrepaidIn(BaseModel):
@@ -83,11 +97,24 @@ class PrepaidIn(BaseModel):
 
 
 class PrepaidOut(BaseModel):
+    id: int | None = None
     client_id: int
     type_train_id: int
     summ: int
     count_train: int
     price_per_train: float
+    is_complete: bool | None = None
+    used_count: int | None = None
+    remaining: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PrepaidPage(BaseModel):
+    items: list[PrepaidOut]
+    total: int
+    limit: int
+    offset: int
 
 
 class MonthReportOut(BaseModel):

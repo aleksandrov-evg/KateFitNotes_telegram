@@ -28,11 +28,29 @@ class BookingService:
         self._repo = repo
         self._prepaid = PrepaidService(repo)
 
-    def list_train_types(self, group: bool) -> list[dict]:
+    def list_train_types(self, group: bool | None = False) -> list[dict]:
         return self._repo.list_all_train(group)
 
     def list_available_slots(self, session_date: Any) -> list:
         return available_slots(self._repo.select_time_at_data(session_date))
+
+    def list_bookings(
+        self,
+        date_from: Any = None,
+        date_to: Any = None,
+        client_id: Any = None,
+        updated_since: Any = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> dict:
+        return self._repo.list_bookings(
+            date_from=date_from,
+            date_to=date_to,
+            client_id=client_id,
+            updated_since=updated_since,
+            limit=limit,
+            offset=offset,
+        )
 
     def suggest_personal_price(self, client_id: Any, type_train_id: Any) -> PersonalPriceHint:
         prepaid_price = self._prepaid.price_for_session(client_id, type_train_id)
@@ -68,7 +86,7 @@ class BookingService:
         complete_id = self._prepaid.complete_id_for_session(client_id, type_train_id)
 
         try:
-            self._repo.insert_in_schedule(
+            schedule_id = self._repo.insert_in_schedule(
                 session_date,
                 client_id,
                 [client_id],
@@ -85,12 +103,16 @@ class BookingService:
             raise SlotTakenError("слот уже занят") from exc
 
         return {
+            "id": schedule_id,
             "client": client_id,
+            "participants": [int(client_id)],
             "date": session_date,
             "time": session_time,
             "price": price,
             "type_train_id": type_train_id,
             "accounting_id": accounting_id,
+            "is_group": False,
+            "rent_debt": train.get("rent_debt"),
         }
 
     def book_group(
@@ -114,7 +136,7 @@ class BookingService:
 
         participants = [int(item) for item in client_ids]
         try:
-            self._repo.insert_in_schedule(
+            schedule_id = self._repo.insert_in_schedule(
                 session_date,
                 None,
                 participants,
@@ -130,14 +152,17 @@ class BookingService:
         except UniqueViolation as exc:
             raise SlotTakenError("слот уже занят") from exc
 
-        row = self._repo.get_schedule_at(session_date, session_time)
-        if row:
-            participants = self._repo.get_schedule_participants(row["id"])
+        if schedule_id is not None:
+            participants = self._repo.get_schedule_participants(schedule_id)
         return {
+            "id": schedule_id,
             "client": None,
             "participants": participants,
             "date": session_date,
             "time": session_time,
             "price": price,
             "type_train_id": type_train_id,
+            "accounting_id": None,
+            "is_group": True,
+            "rent_debt": train.get("rent_debt"),
         }

@@ -42,12 +42,14 @@ class FakeApiRepo:
                 "type_train": "силовая 1 чел",
                 "group_train": False,
                 "rent_debt": 0,
+                "location": "ter_fit",
             },
             {
                 "id": GROUP_TRAIN_ID,
                 "type_train": "группа",
                 "group_train": True,
                 "rent_debt": 500,
+                "location": "ter_fit",
             },
         ]
         self.occupied: dict = {}
@@ -106,7 +108,9 @@ class FakeApiRepo:
     def select_last_client(self, number_client=0):
         return self.show_all_clients()
 
-    def list_all_train(self, group):
+    def list_all_train(self, group=False):
+        if group is None:
+            return [dict(row) for row in self.trains]
         return [
             dict(row)
             for row in self.trains
@@ -130,6 +134,51 @@ class FakeApiRepo:
             if row["id"] == schedule_id:
                 return list(row.get("participants") or [])
         return []
+
+    def list_bookings(
+        self,
+        date_from=None,
+        date_to=None,
+        client_id=None,
+        updated_since=None,
+        limit=200,
+        offset=0,
+    ):
+        items = [dict(row) for row in self.schedules]
+        if date_from is not None:
+            items = [row for row in items if row["date"] >= date_from]
+        if date_to is not None:
+            items = [row for row in items if row["date"] <= date_to]
+        if client_id is not None:
+            items = [
+                row
+                for row in items
+                if row.get("client_id") == client_id
+                or client_id in (row.get("participants") or [])
+            ]
+        total = len(items)
+        return {"items": items[offset : offset + limit], "total": total}
+
+    def list_prepaid(
+        self,
+        client_id=None,
+        active=None,
+        updated_since=None,
+        limit=200,
+        offset=0,
+    ):
+        items = [dict(row) for row in self.active_prepaid]
+        if client_id is not None:
+            items = [row for row in items if row["client_id"] == client_id]
+        if active is True:
+            items = [row for row in items if not row.get("is_complete")]
+        elif active is False:
+            items = [row for row in items if row.get("is_complete")]
+        for row in items:
+            row.setdefault("used_count", 0)
+            row.setdefault("is_complete", False)
+        total = len(items)
+        return {"items": items[offset : offset + limit], "total": total}
 
     def insert_in_schedule(
         self,
@@ -158,11 +207,13 @@ class FakeApiRepo:
                 "client_id": client_id,
                 "participants": list(participant_ids or []),
                 "price": train_price,
+                "rent_debt": rent_debt,
                 "type_train_id": type_train_id,
                 "accounting_id": accounting_id,
                 "is_group": is_group,
             }
         )
+        return schedule_id
 
     def insert_in_accounting(
         self, client_id, summ, count_train, price_per_train, type_train_id
@@ -170,16 +221,20 @@ class FakeApiRepo:
         self.insert_accounting_calls.append(
             (client_id, summ, count_train, price_per_train, type_train_id)
         )
+        package_id = len(self.active_prepaid) + 1
         self.active_prepaid.append(
             {
-                "id": len(self.active_prepaid) + 1,
+                "id": package_id,
                 "client_id": client_id,
                 "summ": summ,
                 "count_train": count_train,
                 "price_per_train": price_per_train,
                 "type_train_id": type_train_id,
+                "is_complete": False,
+                "used_count": 0,
             }
         )
+        return package_id
 
     def get_active_prepaid_for_client(self, client_id, type_train_id):
         return [
@@ -245,14 +300,74 @@ def test_openapi_has_client_and_booking_paths():
     assert "/api/v1/clients" in paths
     assert "get" in paths["/api/v1/clients"]
     assert "post" in paths["/api/v1/clients"]
+    assert "/api/v1/bookings" in paths
+    assert "get" in paths["/api/v1/bookings"]
     assert "/api/v1/bookings/personal" in paths
     assert "/api/v1/bookings/group" in paths
     assert "/api/v1/prepaid" in paths
+    assert "get" in paths["/api/v1/prepaid"]
+    assert "post" in paths["/api/v1/prepaid"]
     assert "/api/v1/reports/monthly" in paths
     client_get = paths["/api/v1/clients"]["get"]
     assert "401" in client_get["responses"]
     booking_post = paths["/api/v1/bookings/personal"]["post"]
     assert "requestBody" in booking_post
+
+
+def test_train_types_include_location():
+    client = make_client_app()
+    headers = auth_headers(client)
+    response = client.get("/api/v1/train-types", headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body
+    assert set(body[0]) >= {"id", "type_train", "group_train", "location"}
+    assert body[0]["location"] == "ter_fit"
+
+
+def test_list_bookings_and_prepaid():
+    repo = FakeApiRepo()
+    client = make_client_app(repo)
+    headers = auth_headers(client)
+    booked = client.post(
+        "/api/v1/bookings/personal",
+        headers=headers,
+        json={
+            "client_id": 42,
+            "type_train_id": PERSONAL_TRAIN_ID,
+            "date": SESSION_DATE.isoformat(),
+            "time": "10:00:00",
+            "price": 1500,
+        },
+    )
+    assert booked.status_code == 201
+    assert booked.json()["id"] == 1
+    prepaid = client.post(
+        "/api/v1/prepaid",
+        headers=headers,
+        json={
+            "client_id": 42,
+            "type_train_id": PERSONAL_TRAIN_ID,
+            "summ": 1000,
+            "count": 10,
+        },
+    )
+    assert prepaid.status_code == 201
+    assert prepaid.json()["id"] == 1
+    bookings = client.get("/api/v1/bookings", headers=headers)
+    assert bookings.status_code == 200
+    booking_page = bookings.json()
+    assert booking_page["total"] == 1
+    assert booking_page["items"][0]["id"] == 1
+    packages = client.get(
+        "/api/v1/prepaid",
+        headers=headers,
+        params={"client_id": 42, "active": True},
+    )
+    assert packages.status_code == 200
+    package_page = packages.json()
+    assert package_page["total"] == 1
+    assert package_page["items"][0]["remaining"] == 10
 
 
 def test_clients_without_token_is_401():

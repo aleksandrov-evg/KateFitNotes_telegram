@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -15,6 +15,7 @@ from src.Kate_Fit_Notes.api.deps import (
 )
 from src.Kate_Fit_Notes.api.schemas import (
     BookingOut,
+    BookingPage,
     ClientCreate,
     ClientOut,
     ClientPage,
@@ -23,6 +24,7 @@ from src.Kate_Fit_Notes.api.schemas import (
     PersonalBookingIn,
     PrepaidIn,
     PrepaidOut,
+    PrepaidPage,
     SlotListOut,
     TrainTypeOut,
 )
@@ -83,7 +85,7 @@ def get_client(
 
 @router.get("/train-types", response_model=list[TrainTypeOut])
 def list_train_types(
-    group: bool = Query(default=False),
+    group: bool | None = Query(default=None),
     service: BookingService = Depends(get_booking_service),
 ) -> list[TrainTypeOut]:
     return [train_type_out(row) for row in service.list_train_types(group)]
@@ -96,6 +98,32 @@ def list_slots(
 ) -> SlotListOut:
     slots = service.list_available_slots(session_date)
     return SlotListOut(date=session_date, slots=[slot_label(slot) for slot in slots])
+
+
+@router.get("/bookings", response_model=BookingPage)
+def list_bookings(
+    date_from: date | None = Query(default=None, alias="from"),
+    date_to: date | None = Query(default=None, alias="to"),
+    client_id: int | None = Query(default=None),
+    updated_since: datetime | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    service: BookingService = Depends(get_booking_service),
+) -> BookingPage:
+    page = service.list_bookings(
+        date_from=date_from,
+        date_to=date_to,
+        client_id=client_id,
+        updated_since=updated_since,
+        limit=limit,
+        offset=offset,
+    )
+    return BookingPage(
+        items=[booking_out(row) for row in page["items"]],
+        total=page["total"],
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
@@ -135,6 +163,30 @@ def book_group(
         price=body.price,
     )
     return booking_out(booked)
+
+
+@router.get("/prepaid", response_model=PrepaidPage)
+def list_prepaid(
+    client_id: int | None = Query(default=None),
+    active: bool | None = Query(default=None),
+    updated_since: datetime | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    service: PrepaidService = Depends(get_prepaid_service),
+) -> PrepaidPage:
+    page = service.list_packages(
+        client_id=client_id,
+        active=active,
+        updated_since=updated_since,
+        limit=limit,
+        offset=offset,
+    )
+    return PrepaidPage(
+        items=[prepaid_out(row) for row in page["items"]],
+        total=page["total"],
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/prepaid", response_model=PrepaidOut, status_code=status.HTTP_201_CREATED)

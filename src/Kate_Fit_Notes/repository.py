@@ -30,7 +30,7 @@ class KateFitRepository(Protocol):
 
     def select_last_client(self, number_client: int = 0) -> list[dict]: ...
 
-    def list_all_train(self, group: bool) -> list[dict]: ...
+    def list_all_train(self, group: bool | None = False) -> list[dict]: ...
 
     def get_train(self, train_id: Any) -> dict | None: ...
 
@@ -39,6 +39,25 @@ class KateFitRepository(Protocol):
     def get_schedule_at(self, date: Any, time: Any) -> dict | None: ...
 
     def get_schedule_participants(self, schedule_id: Any) -> list[int]: ...
+
+    def list_bookings(
+        self,
+        date_from: Any = None,
+        date_to: Any = None,
+        client_id: Any = None,
+        updated_since: Any = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> dict: ...
+
+    def list_prepaid(
+        self,
+        client_id: Any = None,
+        active: bool | None = None,
+        updated_since: Any = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> dict: ...
 
     def insert_in_schedule(
         self,
@@ -53,7 +72,7 @@ class KateFitRepository(Protocol):
         type_train_id: Any,
         set_is_complete_true: Any = False,
         accounting_id: Any = None,
-    ) -> None: ...
+    ) -> int | None: ...
 
     def insert_in_accounting(
         self,
@@ -62,7 +81,7 @@ class KateFitRepository(Protocol):
         count_train: Any,
         price_per_train: Any,
         type_train_id: Any,
-    ) -> None: ...
+    ) -> int | None: ...
 
     def get_active_prepaid_for_client(
         self, client_id: Any, type_train_id: Any
@@ -141,7 +160,8 @@ class PostgresRepository:
 
     def get_client(self, client_id: Any) -> dict | None:
         rows = self._fetch_all(
-            "SELECT id, phone, name, surname, add_time FROM main.client WHERE id = %s",
+            "SELECT id, phone, name, surname, add_time, inactive "
+            "FROM main.client WHERE id = %s",
             (client_id,),
         )
         return rows[0] if rows else None
@@ -162,7 +182,7 @@ class PostgresRepository:
         )
         total = int(count_rows[0]["total"]) if count_rows else 0
         items = self._fetch_all(
-            f"SELECT id, phone, name, surname, add_time FROM main.client {where} "
+            f"SELECT id, phone, name, surname, add_time, inactive FROM main.client {where} "
             "ORDER BY add_time, id LIMIT %s OFFSET %s",
             params + (limit, offset),
         )
@@ -189,9 +209,11 @@ class PostgresRepository:
             params = (number_client,)
         return self._fetch_all(sql, params)
 
-    def list_all_train(self, group: bool) -> list[dict]:
+    def list_all_train(self, group: bool | None = False) -> list[dict]:
+        if group is None:
+            return self._fetch_all("SELECT * FROM main.trains ORDER BY id")
         return self._fetch_all(
-            "SELECT * FROM main.trains WHERE group_train = %s",
+            "SELECT * FROM main.trains WHERE group_train = %s ORDER BY id",
             (group,),
         )
 
@@ -224,6 +246,92 @@ class PostgresRepository:
         )
         return [int(row["client_id"]) for row in rows]
 
+    def list_bookings(
+        self,
+        date_from: Any = None,
+        date_to: Any = None,
+        client_id: Any = None,
+        updated_since: Any = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> dict:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if date_from is not None:
+            clauses.append("s.date >= %s")
+            params.append(date_from)
+        if date_to is not None:
+            clauses.append("s.date <= %s")
+            params.append(date_to)
+        if updated_since is not None:
+            clauses.append("s.add_time >= %s")
+            params.append(updated_since)
+        if client_id is not None:
+            clauses.append(
+                "(s.client_id = %s OR EXISTS ("
+                "SELECT 1 FROM main.schedule_participant sp "
+                "WHERE sp.schedule_id = s.id AND sp.client_id = %s))"
+            )
+            params.extend([client_id, client_id])
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        count_rows = self._fetch_all(
+            f"SELECT count(*) AS total FROM main.schedule s {where}",
+            tuple(params),
+        )
+        total = int(count_rows[0]["total"]) if count_rows else 0
+        items = self._fetch_all(
+            "SELECT s.id, s.date, s.time, s.client_id, s.is_group, s.price, "
+            "s.rent_debt, s.type_train_id, s.accounting_id, s.add_time, "
+            "s.type_train "
+            f"FROM main.schedule s {where} "
+            "ORDER BY s.date, s.time, s.id "
+            "LIMIT %s OFFSET %s",
+            tuple(params) + (limit, offset),
+        )
+        for row in items:
+            row["participants"] = self.get_schedule_participants(row["id"])
+        return {"items": items, "total": total}
+
+    def list_prepaid(
+        self,
+        client_id: Any = None,
+        active: bool | None = None,
+        updated_since: Any = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> dict:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if client_id is not None:
+            clauses.append("a.client_id = %s")
+            params.append(client_id)
+        if active is True:
+            clauses.append("a.is_complete = False")
+        elif active is False:
+            clauses.append("a.is_complete = True")
+        if updated_since is not None:
+            clauses.append("a.updated_at >= %s")
+            params.append(updated_since)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        count_rows = self._fetch_all(
+            f"SELECT count(*) AS total FROM main.accounting a {where}",
+            tuple(params),
+        )
+        total = int(count_rows[0]["total"]) if count_rows else 0
+        items = self._fetch_all(
+            "SELECT a.id, a.client_id, a.type_train_id, a.summ, a.count_train, "
+            "a.price_per_train, a.is_complete, a.created_at, a.updated_at, "
+            "COALESCE(("
+            "  SELECT count(*) FROM main.schedule s "
+            "  WHERE s.accounting_id = a.id"
+            "), 0) AS used_count "
+            f"FROM main.accounting a {where} "
+            "ORDER BY a.id "
+            "LIMIT %s OFFSET %s",
+            tuple(params) + (limit, offset),
+        )
+        return {"items": items, "total": total}
+
     def insert_in_schedule(
         self,
         date: Any,
@@ -237,7 +345,7 @@ class PostgresRepository:
         type_train_id: Any,
         set_is_complete_true: Any = False,
         accounting_id: Any = None,
-    ) -> None:
+    ) -> int | None:
         participants = _as_id_list(participant_ids)
         with self._pool.connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -272,7 +380,7 @@ class PostgresRepository:
                 )
                 logger.info("SQL %s", cur.statusmessage)
                 inserted = cur.fetchone()
-                schedule_id = inserted["id"] if inserted else None
+                schedule_id = int(inserted["id"]) if inserted else None
                 for participant_id in participants:
                     cur.execute(
                         "INSERT INTO main.schedule_participant "
@@ -286,6 +394,7 @@ class PostgresRepository:
                         (set_is_complete_true,),
                     )
                     logger.info("SQL %s", cur.statusmessage)
+        return schedule_id
 
     def insert_in_accounting(
         self,
@@ -294,14 +403,22 @@ class PostgresRepository:
         count_train: Any,
         price_per_train: Any,
         type_train_id: Any,
-    ) -> None:
-        self._execute(
-            "INSERT INTO main.accounting "
-            "(client_id, summ, count_train, updated_at, created_at, "
-            "price_per_train, type_train_id) "
-            f"VALUES (%s, %s, %s, {ACCOUNTING_NOW_SQL}, {ACCOUNTING_NOW_SQL}, %s, %s)",
-            (client_id, summ, count_train, price_per_train, type_train_id),
-        )
+    ) -> int | None:
+        with self._pool.connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "INSERT INTO main.accounting "
+                    "(client_id, summ, count_train, updated_at, created_at, "
+                    "price_per_train, type_train_id) "
+                    f"VALUES (%s, %s, %s, {ACCOUNTING_NOW_SQL}, {ACCOUNTING_NOW_SQL}, %s, %s) "
+                    "RETURNING id",
+                    (client_id, summ, count_train, price_per_train, type_train_id),
+                )
+                logger.info("SQL %s", cur.statusmessage)
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return int(row["id"])
 
     def get_active_prepaid_for_client(
         self, client_id: Any, type_train_id: Any

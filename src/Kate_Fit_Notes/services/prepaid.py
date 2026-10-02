@@ -46,16 +46,36 @@ class PrepaidService:
             raise MultiplePrepaidError(len(active), [row["id"] for row in active])
 
         price = price_per_train(summ_value, count_train)
-        self._repo.insert_in_accounting(
+        package_id = self._repo.insert_in_accounting(
             client_id, summ_value, count_train, price, type_train_id
         )
         return {
+            "id": package_id,
             "client_id": client_id,
             "type_train_id": type_train_id,
             "summ": summ_value,
             "count_train": count_train,
             "price_per_train": price,
+            "is_complete": False,
+            "used_count": 0,
+            "remaining": count_train,
         }
+
+    def list_packages(
+        self,
+        client_id: Any = None,
+        active: bool | None = None,
+        updated_since: Any = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> dict:
+        return self._repo.list_prepaid(
+            client_id=client_id,
+            active=active,
+            updated_since=updated_since,
+            limit=limit,
+            offset=offset,
+        )
 
     def price_for_session(self, client_id: Any, type_train_id: Any) -> Any:
         prepaid = self._active(client_id, type_train_id)
