@@ -16,6 +16,8 @@ services:
       UI_API_ORIGIN: ${UI_API_ORIGIN:?UI_API_ORIGIN is required, e.g. https://api.example.com}
     expose:
       - "80"
+    ports:
+      - "8080:80"
     networks:
       - dokploy-network
 
