@@ -1,0 +1,24 @@
+# Dokploy: Compose Path = ./docker-compose.ui.yml
+# Domain: сервис ui, Container Port = 80, HTTPS включить в Dokploy.
+# UI_API_ORIGIN: адрес API, доступный из контейнера UI, без завершающего /.
+# Например https://api.example.com либо http://<уникальное-Docker-имя-api>:8000.
+# API развёртывается отдельно через docker-compose.bot.yml.
+# Вход: API_USER / API_PASSWORD существующего API; секреты в UI не передавать.
+# Локально: cd ui && UI_API_ORIGIN=http://127.0.0.1:8000 npm run dev
+# Проверки: npm --prefix ui run check && npm --prefix ui test
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    restart: unless-stopped
+    environment:
+      UI_API_ORIGIN: ${UI_API_ORIGIN:?UI_API_ORIGIN is required, e.g. https://api.example.com}
+    expose:
+      - "80"
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true

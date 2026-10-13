@@ -77,7 +77,9 @@ def booking_out(row: dict) -> BookingOut:
         time=session_time,
         price=None if row.get("price") is None else float(row["price"]),
         rent_debt=None if rent is None else float(rent),
-        type_train_id=int(row["type_train_id"]),
+        type_train_id=(
+            None if row.get("type_train_id") is None else int(row["type_train_id"])
+        ),
         accounting_id=None if accounting_id is None else int(accounting_id),
         is_group=None if is_group is None else bool(is_group),
         add_time=add_time if isinstance(add_time, datetime) else None,

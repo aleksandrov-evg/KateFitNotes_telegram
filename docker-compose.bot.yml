@@ -4,6 +4,7 @@
 #   Compose Type = Docker Compose
 #   Compose Path = ./docker-compose.bot.yml
 #   Domain вешать на сервис api, порт 8000
+#   Прямой доступ к Swagger: http://<IP-сервера>:8000/docs
 #   Env: TG_* / API_* / SQL_* (см. .env.example)
 #
 # БД деплоится отдельно. Укажите SQL_HOST / SQL_PORT / SQL_DATABASE
@@ -23,6 +24,7 @@ services:
     image: telegram_bot:latest
     restart: always
     environment:
+      TZ: Europe/Moscow
       TG_ACCOUNT: ${TG_ACCOUNT}
       TG_PASS: ${TG_PASS}
       TG_TOKEN: ${TG_TOKEN}
@@ -50,6 +52,7 @@ services:
         "8000",
       ]
     environment:
+      TZ: Europe/Moscow
       TG_ACCOUNT: ${TG_ACCOUNT}
       TG_PASS: ${TG_PASS}
       TG_TOKEN: ${TG_TOKEN}
@@ -61,6 +64,8 @@ services:
       API_JWT_SECRET: ${API_JWT_SECRET}
     expose:
       - "8000"
+    ports:
+      - "8000:8000"
     networks:
       - dokploy-network
 

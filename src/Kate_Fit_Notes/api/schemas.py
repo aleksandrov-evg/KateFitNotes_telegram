@@ -76,7 +76,7 @@ class BookingOut(BaseModel):
     time: time
     price: float | None = None
     rent_debt: float | None = None
-    type_train_id: int
+    type_train_id: int | None = None
     accounting_id: int | None = None
     is_group: bool | None = None
     add_time: datetime | None = None

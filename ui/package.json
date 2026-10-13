@@ -1,0 +1,10 @@
+{
+  "name": "katefit-notes-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "python3 scripts/dev_server.py",
+    "check": "node --check src/app.js && node --check src/api.js && node --check src/domain.js",
+    "test": "node --test tests/*.test.js"
+  }
+}

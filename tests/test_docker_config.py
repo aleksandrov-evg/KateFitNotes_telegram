@@ -41,18 +41,18 @@ def test_compose_db_healthcheck_and_named_network():
 def test_compose_bot_is_dokploy_ready():
     text = (ROOT / "docker-compose.bot.yml").read_text(encoding="utf-8")
     assert "TG_TOKEN: ${TG_TOKEN}" in text
-    assert "SQL_HOST: ${SQL_HOST:-db_pg}" in text
+    assert "SQL_HOST: ${SQL_HOST:?SQL_HOST is required}" in text
     assert "SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}" in text
     assert "TG_ALLOWED_CHAT_IDS: ${TG_ALLOWED_CHAT_IDS}" in text
     assert "app_from_env" in text
     assert "API_JWT_SECRET: ${API_JWT_SECRET}" in text
     assert "expose:" in text
     assert '"8000"' in text
-    assert "8000:8000" not in text
+    assert '"8000:8000"' in text
     assert "container_name:" not in text
     assert "dokploy-network" in text
-    assert "name: katefitnotes_postgres" in text
-    assert text.count("external: true") >= 2
+    assert "name: katefitnotes_postgres" not in text
+    assert text.count("external: true") == 1
 
 
 def test_env_example_documents_token_and_test_db():

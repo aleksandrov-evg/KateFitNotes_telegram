@@ -1,0 +1,7 @@
+**
+!ui/
+!ui/Dockerfile
+!ui/index.html
+!ui/nginx.conf.template
+!ui/src/
+!ui/src/**
