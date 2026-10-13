@@ -123,15 +123,41 @@ function createDraft() {
   const client=new URLSearchParams(location.hash.split('?')[1]||'').get('client')||'';
   return {client:person(client)?client:'',clients:[],type:'',date:today(),time:'',price:'',summ:'',count:'',available:[],slotsLoaded:false};
 }
-function clientSelect(selected) {return `<select name="client" required><option value="">Выберите клиента</option>${state.clients.map(c=>`<option value="${c.id}" ${Number(selected)===c.id?'selected':''}>${e(clientName(c))} · ${e(phoneLabel(c.phone))}</option>`).join('')}</select>`;}
+function clientLabel(client) {return `${clientName(client)} · ${phoneLabel(client.phone)}`;}
+function clientMatches(client, query) {
+  const normalized=query.trim().toLocaleLowerCase('ru'),digits=normalized.replace(/\D/g,'');
+  if(!normalized)return true;
+  return clientLabel(client).toLocaleLowerCase('ru').includes(normalized)||(digits.length>=3&&String(client.phone).includes(digits.replace(/^[78](?=\d{10}$)/,'')));
+}
+function clientPicker(selected, id='client-picker') {
+  const chosen=person(selected);
+  return `<div class="client-picker" id="${id}"><span class="sr-only">Поиск клиента</span><input id="${id}-search" type="search" autocomplete="off" placeholder="Начните вводить имя или телефон" value="${chosen?e(clientLabel(chosen)):''}" aria-label="Поиск клиента" aria-controls="${id}-options" aria-expanded="true"><input type="hidden" name="client" value="${chosen?.id||''}"><div class="client-options" id="${id}-options" role="listbox">${state.clients.map(c=>`<button type="button" role="option" aria-selected="${chosen?.id===c.id}" data-client-option="${c.id}"><strong>${e(clientName(c))}</strong><small>${e(phoneLabel(c.phone))}</small></button>`).join('')||empty('Сначала добавьте клиентов')}</div></div>`;
+}
+function wireClientPicker(id, onChange) {
+  const picker=document.querySelector(`#${id}`),search=picker.querySelector('input[type=search]'),value=picker.querySelector('[name=client]');
+  const filter=query=>picker.querySelectorAll('[data-client-option]').forEach(option=>{
+    const client=person(option.dataset.client);option.hidden=!clientMatches(client,query);
+  });
+  search.onfocus=()=>search.select();
+  search.oninput=()=>{
+    if(value.value){value.value='';onChange('');}
+    filter(search.value);
+  };
+  picker.querySelectorAll('[data-client-option]').forEach(option=>option.onclick=()=>{
+    const client=person(option.dataset.client);if(!client)return;
+    value.value=String(client.id);search.value=clientLabel(client);filter(search.value);
+    picker.querySelectorAll('[data-client-option]').forEach(item=>item.setAttribute('aria-selected',String(item===option)));
+    onChange(value.value);
+  });
+}
 function typeSelect(selected,group=false) {return `<select name="type" required><option value="">Выберите тип</option>${state.types.filter(t=>t.group_train===group).map(t=>`<option value="${t.id}" ${Number(selected)===t.id?'selected':''}>${e(t.type_train)}${t.location==='home'?' · Дом':t.location==='ter_fit'?' · Студия':''}</option>`).join('')}</select>`;}
 function renderBooking() {
   const group=state.page==='group';state.draft??=createDraft();const d=state.draft;
-  page(header(group?'Групповая запись':'Персональная запись',group?'Выберите участников, свободное время и общую цену занятия.':'Клиент → тип → дата → свободное время → подтверждение')+`<form id="booking-form"><div class="booking-grid"><section class="panel"><h2>${group?'Участники':'Параметры'}</h2>${group?`<label class="search"><span class="sr-only">Поиск участников</span><input type="search" id="participant-search" placeholder="Найти клиента"></label><div class="participant-list">${state.clients.map(c=>`<label class="participant" data-search="${e(`${clientName(c)} ${c.phone}`.toLowerCase())}"><input type="checkbox" name="participants" value="${c.id}" ${d.clients.includes(c.id)?'checked':''}><span>${e(clientName(c))}</span></label>`).join('')||empty('Сначала добавьте клиентов')}<p id="selected-count" class="muted">Выбрано: ${d.clients.length}</p></div>`:field('Клиент',clientSelect(d.client))}${field('Тип тренировки',typeSelect(d.type,group))}<div id="price-field"></div><div class="error" id="booking-error" role="alert" hidden></div><div class="actions">${link('overview','Отмена')}<button type="submit" class="primary">${group?'Создать группу':'Записать'}</button></div></section><section class="panel slot-panel">${weekControls()}<div class="days">${weekDays(state.week).map(date=>`<button type="button" class="day ${d.date===date?'selected':''}" data-date="${date}"><span>${e(formatDate(date,{weekday:'short'}))}</span><strong>${e(formatDate(date,{day:'numeric'}))}</strong></button>`).join('')}</div>${field('Дата занятия',`<input type="date" name="date" value="${d.date}" required>`)}<h3>Свободное время · ${e(formatDate(d.date))}</h3><div id="slots" role="group" aria-label="Время занятия"></div><p class="muted">Серым отмечено занятое время. Время занятий — московское.</p></section></div></form>`);
+  page(header(group?'Групповая запись':'Персональная запись',group?'Выберите участников, свободное время и общую цену занятия.':'Клиент → тип → дата → свободное время → подтверждение')+`<form id="booking-form"><div class="booking-grid"><section class="panel"><h2>${group?'Участники':'Параметры'}</h2>${group?`<label class="search"><span class="sr-only">Поиск участников</span><input type="search" id="participant-search" placeholder="Найти клиента"></label><div class="participant-list">${state.clients.map(c=>`<label class="participant" data-search="${e(`${clientName(c)} ${c.phone}`.toLowerCase())}"><input type="checkbox" name="participants" value="${c.id}" ${d.clients.includes(c.id)?'checked':''}><span>${e(clientName(c))}</span></label>`).join('')||empty('Сначала добавьте клиентов')}<p id="selected-count" class="muted">Выбрано: ${d.clients.length}</p></div>`:field('Клиент',clientPicker(d.client,'booking-client-picker'))}${field('Тип тренировки',typeSelect(d.type,group))}<div id="price-field"></div><div class="error" id="booking-error" role="alert" hidden></div><div class="actions">${link('overview','Отмена')}<button type="submit" class="primary">${group?'Создать группу':'Записать'}</button></div></section><section class="panel slot-panel">${weekControls()}<div class="days">${weekDays(state.week).map(date=>`<button type="button" class="day ${d.date===date?'selected':''}" data-date="${date}"><span>${e(formatDate(date,{weekday:'short'}))}</span><strong>${e(formatDate(date,{day:'numeric'}))}</strong></button>`).join('')}</div>${field('Дата занятия',`<input type="date" name="date" value="${d.date}" required>`)}<h3>Свободное время · ${e(formatDate(d.date))}</h3><div id="slots" role="group" aria-label="Время занятия"></div><p class="muted">Серым отмечено занятое время. Время занятий — московское.</p></section></div></form>`);
   const form=document.querySelector('#booking-form');
   form.querySelectorAll('[data-week]').forEach(b=>b.type='button');
   form.querySelector('[name=type]').onchange=event=>{d.type=event.target.value;d.price='';renderPrice();};
-  if(!group)form.querySelector('[name=client]').onchange=event=>{d.client=event.target.value;d.price='';renderPrice();};
+  if(!group)wireClientPicker('booking-client-picker',client=>{d.client=client;d.price='';renderPrice();});
   else {
     document.querySelector('#participant-search').oninput=event=>{const q=event.target.value.toLowerCase();document.querySelectorAll('.participant').forEach(row=>row.hidden=!row.dataset.search.includes(q));};
     form.querySelectorAll('[name=participants]').forEach(input=>input.onchange=()=>{d.clients=[...form.querySelectorAll('[name=participants]:checked')].map(i=>Number(i.value));document.querySelector('#selected-count').textContent=`Выбрано: ${d.clients.length}`;renderPrice();});
@@ -182,8 +208,9 @@ async function fetchSlots() {
 }
 function renderPrepaid() {
   state.draft??=createDraft();const d=state.draft;
-  page(header('Предоплата','Пакеты персональных тренировок и остаток занятий')+`<div class="prepaid-grid"><section class="panel"><h2>Добавить пакет</h2><form id="prepaid-form">${field('Клиент',clientSelect(d.client))}${field('Тип тренировки',typeSelect(d.type))}<div class="two-fields">${field('Сумма, ₽',`<input name="summ" type="number" inputmode="numeric" min="1" step="1" value="${e(d.summ)}" required>`)}${field('Занятий',`<input name="count" type="number" inputmode="numeric" min="1" step="1" value="${e(d.count)}" required>`)}</div><div class="error" id="prepaid-error" role="alert" hidden></div><button class="primary" type="submit">Оформить пакет</button></form></section><section class="note payment-summary" id="payment-summary"></section></div><section class="panel packages-panel"><div class="section-header"><h2>Пакеты клиентов</h2><label><span class="sr-only">Статус пакетов</span><select id="package-filter"><option value="active">Активные</option><option value="complete">Завершённые</option><option value="all">Все</option></select></label></div><div id="packages-list"></div></section>`);
+  page(header('Предоплата','Пакеты персональных тренировок и остаток занятий')+`<div class="prepaid-grid"><section class="panel"><h2>Добавить пакет</h2><form id="prepaid-form">${field('Клиент',clientPicker(d.client,'prepaid-client-picker'))}${field('Тип тренировки',typeSelect(d.type))}<div class="two-fields">${field('Сумма, ₽',`<input name="summ" type="number" inputmode="numeric" min="1" step="1" value="${e(d.summ)}" required>`)}${field('Занятий',`<input name="count" type="number" inputmode="numeric" min="1" step="1" value="${e(d.count)}" required>`)}</div><div class="error" id="prepaid-error" role="alert" hidden></div><button class="primary" type="submit">Оформить пакет</button></form></section><section class="note payment-summary" id="payment-summary"></section></div><section class="panel packages-panel"><div class="section-header"><h2>Пакеты клиентов</h2><label><span class="sr-only">Статус пакетов</span><select id="package-filter"><option value="active">Активные</option><option value="complete">Завершённые</option><option value="all">Все</option></select></label></div><div id="packages-list"></div></section>`);
   const form=document.querySelector('#prepaid-form');
+  wireClientPicker('prepaid-client-picker',client=>{d.client=client;renderPaymentSummary();});
   form.querySelectorAll('input,select').forEach(input=>input.oninput=()=>{d[input.name]=input.value;renderPaymentSummary();});
   renderPaymentSummary();renderPackages();document.querySelector('#package-filter').value=state.packageFilter;
   document.querySelector('#package-filter').onchange=event=>{state.packageFilter=event.target.value;renderPackages();};
