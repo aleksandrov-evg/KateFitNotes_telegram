@@ -22,7 +22,7 @@ from src.Kate_Fit_Notes.services.errors import (
 )
 from src.Kate_Fit_Notes.services.prepaid import PrepaidService
 from src.Kate_Fit_Notes.services.report import ReportService
-from src.Kate_Fit_Notes.settings import ConfigError, Settings, load_settings
+from src.Kate_Fit_Notes.settings import ApiSettings, ConfigError, Settings, load_api_settings
 
 _UNPROCESSABLE = (
     InvalidPhoneError,
@@ -37,7 +37,7 @@ _CONFLICT = (
 )
 
 
-def create_app(settings: Settings, repository: KateFitRepository) -> FastAPI:
+def create_app(settings: Settings | ApiSettings, repository: KateFitRepository) -> FastAPI:
     if not settings.api_user or not settings.api_password or not settings.api_jwt_secret:
         raise ConfigError(
             "Нет обязательных полей API: API_USER, API_PASSWORD, API_JWT_SECRET"
@@ -73,5 +73,5 @@ def create_app(settings: Settings, repository: KateFitRepository) -> FastAPI:
 
 
 def app_from_env() -> FastAPI:
-    settings = load_settings()
+    settings = load_api_settings()
     return create_app(settings, PostgresRepository.from_settings(settings))

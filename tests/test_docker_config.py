@@ -38,21 +38,38 @@ def test_compose_db_healthcheck_and_named_network():
     assert "name: katefitnotes_postgres" in text
 
 
-def test_compose_bot_is_dokploy_ready():
+def test_compose_bot_is_dokploy_ready_and_has_no_api_service():
     text = (ROOT / "docker-compose.bot.yml").read_text(encoding="utf-8")
     assert "TG_TOKEN: ${TG_TOKEN}" in text
     assert "SQL_HOST: ${SQL_HOST:?SQL_HOST is required}" in text
     assert "SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}" in text
     assert "TG_ALLOWED_CHAT_IDS: ${TG_ALLOWED_CHAT_IDS}" in text
-    assert "app_from_env" in text
-    assert "API_JWT_SECRET: ${API_JWT_SECRET}" in text
-    assert "expose:" in text
-    assert '"8000"' in text
-    assert '"8000:8000"' in text
+    assert "app_from_env" not in text
+    assert "API_JWT_SECRET" not in text
     assert "container_name:" not in text
     assert "dokploy-network" in text
     assert "name: katefitnotes_postgres" not in text
     assert text.count("external: true") == 1
+
+
+def test_compose_api_is_independent_and_has_no_telegram_token():
+    text = (ROOT / "docker-compose.api.yml").read_text(encoding="utf-8")
+    assert "dockerfile.api" in text
+    assert "API_JWT_SECRET: ${API_JWT_SECRET:?API_JWT_SECRET is required}" in text
+    assert "SQL_HOST: ${SQL_HOST:?SQL_HOST is required}" in text
+    assert "TG_TOKEN:" not in text
+    assert "TG_ALLOWED_CHAT_IDS:" not in text
+    assert '"8000:8000"' in text
+    assert "dokploy-network" in text
+    assert "aliases:" in text
+    assert "katefit-api" in text
+
+
+def test_api_dockerfile_does_not_copy_bot_or_secrets():
+    text = (ROOT / "dockerfile.api").read_text(encoding="utf-8")
+    assert "COPY bot.py" not in text
+    assert "config.ini" not in text
+    assert "app_from_env" in text
 
 
 def test_env_example_documents_token_and_test_db():

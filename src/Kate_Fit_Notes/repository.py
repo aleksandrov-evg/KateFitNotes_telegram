@@ -10,7 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 from src.Kate_Fit_Notes.db import ConnectionPool
 from src.Kate_Fit_Notes.domain import ACCOUNTING_NOW_SQL
-from src.Kate_Fit_Notes.settings import Settings
+from src.Kate_Fit_Notes.settings import ApiSettings, Settings
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class PostgresRepository:
         self._pool = pool
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> PostgresRepository:
+    def from_settings(cls, settings: Settings | ApiSettings) -> PostgresRepository:
         return cls(ConnectionPool.from_settings(settings))
 
     @classmethod

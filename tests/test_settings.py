@@ -9,12 +9,17 @@ from pathlib import Path
 
 import pytest
 
-from src.Kate_Fit_Notes.settings import ConfigError, load_settings, parse_allowed_chat_ids
+from src.Kate_Fit_Notes.settings import (
+    ConfigError,
+    load_api_settings,
+    load_settings,
+    parse_allowed_chat_ids,
+)
 
 FULL_ENV = {
     "TG_TOKEN": "token-from-env",
-    "TG_ACCOUNT": "user-env",
-    "TG_PASS": "pass-env",
+    "DB_USER": "user-env",
+    "DB_PASSWORD": "pass-env",
     "SQL_DATABASE": "db-env",
     "SQL_HOST": "host-env",
     "SQL_PORT": "5433",
@@ -107,6 +112,27 @@ class TestLoadSettingsErrors:
         env = {**FULL_ENV, "SQL_PORT": "abc"}
         with pytest.raises(ConfigError, match="SQL_PORT"):
             load_settings(environ=env, ini_path=tmp_path / "no-such.ini")
+
+
+class TestLoadApiSettings:
+    def test_does_not_require_telegram_token(self, tmp_path: Path):
+        env = {
+            k: v
+            for k, v in {
+                **FULL_ENV,
+                "API_USER": "admin",
+                "API_PASSWORD": "secret",
+                "API_JWT_SECRET": "jwt-secret",
+            }.items()
+            if k != "TG_TOKEN"
+        }
+        settings = load_api_settings(environ=env, ini_path=tmp_path / "no-such.ini")
+        assert settings.sql_host == "host-env"
+        assert settings.api_user == "admin"
+
+    def test_requires_api_credentials(self, tmp_path: Path):
+        with pytest.raises(ConfigError, match="API_USER"):
+            load_api_settings(environ=FULL_ENV, ini_path=tmp_path / "no-such.ini")
 
 
 class TestAllowedChatIds:

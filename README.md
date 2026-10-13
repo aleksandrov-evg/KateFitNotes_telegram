@@ -54,8 +54,8 @@ chmod 600 .env
 Заполните в `.env` как минимум следующие значения:
 
 ```dotenv
-TG_ACCOUNT=имя_пользователя_postgres
-TG_PASS=длинный_пароль_postgres
+DB_USER=имя_пользователя_postgres
+DB_PASSWORD=длинный_пароль_postgres
 TG_EMAIL=admin@example.com
 
 TG_TOKEN=токен_telegram_бота

@@ -78,8 +78,8 @@ port=5432
 | `API_USER` | логин HTTP API (JWT) | — |
 | `API_PASSWORD` | пароль HTTP API | — |
 | `API_JWT_SECRET` | секрет подписи JWT | — |
-| `TG_ACCOUNT` | пользователь PostgreSQL (`POSTGRES_USER`) | `[sql] user` |
-| `TG_PASS` | пароль PostgreSQL и pgAdmin | `[sql] password` |
+| `DB_USER` | пользователь PostgreSQL (`POSTGRES_USER`) | `[sql] user` |
+| `DB_PASSWORD` | пароль PostgreSQL и pgAdmin | `[sql] password` |
 | `TG_EMAIL` | логин pgAdmin (`PGADMIN_DEFAULT_EMAIL`) | — |
 | `SQL_DATABASE` | имя БД бота | `[sql] database` |
 | `SQL_HOST` | хост БД бота | `[sql] host` |
@@ -172,7 +172,7 @@ Compose разделён: `docker-compose.db.yml` (БД/pgAdmin) и `docker-comp
 
 ## Как запускать
 
-Локально (env `TG_TOKEN` / `TG_ACCOUNT` / `TG_PASS` / `SQL_*` или fallback `config.ini`):
+Локально (env `TG_TOKEN` / `DB_USER` / `DB_PASSWORD` / `SQL_*` или fallback `config.ini`):
 
 ```bash
 uv sync

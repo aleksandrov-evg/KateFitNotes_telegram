@@ -7,7 +7,7 @@ from typing import Iterator
 
 from psycopg2.pool import ThreadedConnectionPool
 
-from src.Kate_Fit_Notes.settings import Settings
+from src.Kate_Fit_Notes.settings import ApiSettings, Settings
 
 POOL_MINCONN = 1
 POOL_MAXCONN = 5
@@ -20,7 +20,7 @@ class ConnectionPool:
         self._pool = ThreadedConnectionPool(minconn, maxconn, **connect_kw)
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> ConnectionPool:
+    def from_settings(cls, settings: Settings | ApiSettings) -> ConnectionPool:
         return cls(
             dbname=settings.sql_database,
             user=settings.sql_user,
