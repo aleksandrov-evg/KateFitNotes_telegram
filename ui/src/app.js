@@ -136,19 +136,26 @@ function clientPicker(selected, id='client-picker') {
 function wireClientPicker(id, onChange) {
   const picker=document.querySelector(`#${id}`),search=picker.querySelector('input[type=search]'),value=picker.querySelector('[name=client]');
   const filter=query=>picker.querySelectorAll('[data-client-option]').forEach(option=>{
-    const client=person(option.dataset.client);option.hidden=!clientMatches(client,query);
+    const client=person(option.dataset.client);option.hidden=!client||!clientMatches(client,query);
   });
-  search.onfocus=()=>search.select();
-  search.oninput=()=>{
-    if(value.value){value.value='';onChange('');}
-    filter(search.value);
-  };
-  picker.querySelectorAll('[data-client-option]').forEach(option=>option.onclick=()=>{
+  const choose=option=>{
     const client=person(option.dataset.client);if(!client)return;
     value.value=String(client.id);search.value=clientLabel(client);filter(search.value);
     picker.querySelectorAll('[data-client-option]').forEach(item=>item.setAttribute('aria-selected',String(item===option)));
     onChange(value.value);
+  };
+  search.addEventListener('focus',()=>search.select());
+  search.addEventListener('input',()=>{
+    if(value.value){value.value='';onChange('');}
+    filter(search.value);
   });
+  search.addEventListener('keydown',event=>{
+    if(event.key!=='Enter')return;
+    const option=[...picker.querySelectorAll('[data-client-option]')].find(item=>!item.hidden);
+    if(!option)return;
+    event.preventDefault();choose(option);
+  });
+  picker.querySelectorAll('[data-client-option]').forEach(option=>option.addEventListener('click',()=>choose(option)));
 }
 function typeSelect(selected,group=false) {return `<select name="type" required><option value="">Выберите тип</option>${state.types.filter(t=>t.group_train===group).map(t=>`<option value="${t.id}" ${Number(selected)===t.id?'selected':''}>${e(t.type_train)}${t.location==='home'?' · Дом':t.location==='ter_fit'?' · Студия':''}</option>`).join('')}</select>`;}
 function renderBooking() {
@@ -211,7 +218,10 @@ function renderPrepaid() {
   page(header('Предоплата','Пакеты персональных тренировок и остаток занятий')+`<div class="prepaid-grid"><section class="panel"><h2>Добавить пакет</h2><form id="prepaid-form">${field('Клиент',clientPicker(d.client,'prepaid-client-picker'))}${field('Тип тренировки',typeSelect(d.type))}<div class="two-fields">${field('Сумма, ₽',`<input name="summ" type="number" inputmode="numeric" min="1" step="1" value="${e(d.summ)}" required>`)}${field('Занятий',`<input name="count" type="number" inputmode="numeric" min="1" step="1" value="${e(d.count)}" required>`)}</div><div class="error" id="prepaid-error" role="alert" hidden></div><button class="primary" type="submit">Оформить пакет</button></form></section><section class="note payment-summary" id="payment-summary"></section></div><section class="panel packages-panel"><div class="section-header"><h2>Пакеты клиентов</h2><label><span class="sr-only">Статус пакетов</span><select id="package-filter"><option value="active">Активные</option><option value="complete">Завершённые</option><option value="all">Все</option></select></label></div><div id="packages-list"></div></section>`);
   const form=document.querySelector('#prepaid-form');
   wireClientPicker('prepaid-client-picker',client=>{d.client=client;renderPaymentSummary();});
-  form.querySelectorAll('input,select').forEach(input=>input.oninput=()=>{d[input.name]=input.value;renderPaymentSummary();});
+  form.querySelectorAll('input,select').forEach(input=>{
+    if(!input.name)return;
+    input.oninput=()=>{d[input.name]=input.value;renderPaymentSummary();};
+  });
   renderPaymentSummary();renderPackages();document.querySelector('#package-filter').value=state.packageFilter;
   document.querySelector('#package-filter').onchange=event=>{state.packageFilter=event.target.value;renderPackages();};
   form.onsubmit=event=>{event.preventDefault();try{
