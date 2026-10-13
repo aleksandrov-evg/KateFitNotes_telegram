@@ -131,24 +131,40 @@ function clientMatches(client, query) {
 }
 function clientPicker(selected, id='client-picker') {
   const chosen=person(selected);
-  return `<div class="client-picker" id="${id}"><span class="sr-only">Поиск клиента</span><input id="${id}-search" type="search" autocomplete="off" placeholder="Начните вводить имя или телефон" value="${chosen?e(clientLabel(chosen)):''}" aria-label="Поиск клиента"><select name="client" id="${id}-options" aria-label="Результаты поиска клиента" required><option value="">Выберите клиента</option>${state.clients.map(c=>`<option value="${c.id}" ${chosen?.id===c.id?'selected':''}>${e(clientLabel(c))}</option>`).join('')}</select></div>`;
+  return `<div class="client-picker" id="${id}"><span class="sr-only">Поиск клиента</span><input id="${id}-search" type="search" autocomplete="off" placeholder="Начните вводить имя или телефон" value="${chosen?e(clientLabel(chosen)):''}" aria-label="Поиск клиента" aria-controls="${id}-options" aria-expanded="false"><input type="hidden" name="client" value="${chosen?.id||''}"><div class="client-options" id="${id}-options" role="listbox" hidden>${state.clients.map(client=>`<button type="button" role="option" data-client-option="${client.id}"><strong>${e(clientName(client))}</strong><small>${e(phoneLabel(client.phone))}</small></button>`).join('')||empty('Сначала добавьте клиентов')}</div></div>`;
 }
 function wireClientPicker(id, onChange) {
-  const picker=document.querySelector(`#${id}`),search=picker.querySelector('input[type=search]'),select=picker.querySelector('[name=client]');
-  const renderOptions=query=>{
-    const current=select.value;
-    const clients=state.clients.filter(client=>clientMatches(client,query));
-    select.innerHTML=`<option value="">${clients.length?'Выберите клиента':'Клиенты не найдены'}</option>${clients.map(client=>`<option value="${client.id}">${e(clientLabel(client))}</option>`).join('')}`;
-    if(clients.some(client=>String(client.id)===current))select.value=current;
+  const picker=document.querySelector(`#${id}`),search=picker.querySelector('input[type=search]'),value=picker.querySelector('[name=client]'),options=picker.querySelector('[role=listbox]');
+  const filter=query=>{
+    let visible=0;
+    options.querySelectorAll('[data-client-option]').forEach(option=>{
+      const client=person(option.dataset.clientOption),matches=Boolean(client&&clientMatches(client,query));
+      option.hidden=!matches;if(matches)visible++;
+    });
+    options.hidden=visible===0;
+    search.setAttribute('aria-expanded',String(visible>0));
+    return visible;
   };
+  const choose=option=>{
+    const client=person(option.dataset.clientOption);if(!client)return;
+    value.value=String(client.id);search.value=clientLabel(client);options.hidden=true;
+    search.setAttribute('aria-expanded','false');onChange(value.value);
+  };
+  search.addEventListener('focus',()=>filter(search.value));
   search.addEventListener('input',()=>{
-    if(select.value){select.value='';onChange('');}
-    renderOptions(search.value);
+    if(value.value){value.value='';onChange('');}
+    filter(search.value);
   });
-  select.addEventListener('change',()=>{
-    const client=person(select.value);if(!client)return;
-    search.value=clientLabel(client);onChange(select.value);
+  search.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){options.hidden=true;search.setAttribute('aria-expanded','false');return;}
+    if(event.key!=='Enter')return;
+    const option=[...options.querySelectorAll('[data-client-option]')].find(item=>!item.hidden);
+    if(!option)return;
+    event.preventDefault();choose(option);
   });
+  options.querySelectorAll('[data-client-option]').forEach(option=>option.addEventListener('mousedown',event=>{
+    event.preventDefault();choose(option);
+  }));
 }
 function typeSelect(selected,group=false) {return `<select name="type" required><option value="">Выберите тип</option>${state.types.filter(t=>t.group_train===group).map(t=>`<option value="${t.id}" ${Number(selected)===t.id?'selected':''}>${e(t.type_train)}${t.location==='home'?' · Дом':t.location==='ter_fit'?' · Студия':''}</option>`).join('')}</select>`;}
 function renderBooking() {
