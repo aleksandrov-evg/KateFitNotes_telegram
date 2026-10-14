@@ -1,0 +1,160 @@
+/* Gelios V2 is isolated from the existing Terfit workspace. */
+.studio-mode {
+  --accent: #24634f;
+  --soft: #e9f0ec;
+  --muted: #61726a;
+  --border: #e2e8e4;
+  color: #20372e;
+  background: #f4f6f5;
+}
+.studio-shell { background: #f4f6f5; grid-template-columns: 232px minmax(0, 1fr); }
+.studio-shell .sidebar {
+  background: #182b27;
+  color: #f4f8f5;
+  border: 0;
+  padding: 28px 16px 24px;
+  gap: 24px;
+  overflow-y: auto;
+}
+.studio-shell .sidebar .brand { font-size: 20px; padding: 0 8px; letter-spacing: -.5px; }
+.studio-shell .sidebar .brand span { color: #a5b9b0; font-size: 10px; margin-top: 6px; }
+.studio-shell .workspace-switch { margin: 0; color: #a5b9b0; font-size: 11px; }
+.studio-shell .workspace-switch select { background: #243d34; border-color: #41584e; color: #f4f8f5; font-size: 12px; }
+.studio-shell .sidebar nav { gap: 8px; }
+.studio-shell .nav-item { min-height: 44px; padding: 12px; border-radius: 8px; font-size: 12px; color: #c7d5cd; }
+.studio-shell .nav-item svg { flex-shrink: 0; width: 18px; height: 18px; }
+.studio-shell .nav-item:hover { background: #ffffff0d; }
+.studio-shell .nav-item.active { background: #ffffff18; color: #fff; border-left: 0; }
+.studio-shell .account { padding: 12px; border-radius: 12px; background: #ffffff0d; font-size: 12px; }
+.studio-shell .account small { color: #a5b9b0; font-size: 10px; }
+.studio-shell .account .icon-button { color: #c7d5cd; }
+.studio-shell #main { padding: 40px 48px; max-width: 1680px; }
+.studio-shell .page-header { margin-bottom: 28px; gap: 24px; align-items: center; }
+.studio-shell .page-header > div:first-child { min-width: 0; }
+.studio-shell h1 { font-size: 26px; letter-spacing: -.7px; line-height: 1.3; }
+.studio-shell .page-header p { font-size: 12px; margin-top: 6px; }
+.studio-shell h2 { font-size: 18px; margin-bottom: 24px; }
+.studio-shell h3 { font-size: 14px; }
+.studio-mode button, .studio-mode .button { border-radius: 10px; min-height: 44px; font-size: 12px; padding: 11px 16px; }
+.studio-mode .primary { color: #fff; background: #24634f; border-color: #24634f; }
+.studio-mode .primary:hover { background: #1b4e3e; border-color: #1b4e3e; }
+.studio-mode .secondary { background: #fff; border-color: #d7e1db; color: #31473e; }
+.studio-mode .secondary:hover { background: #e9f0ec; }
+.studio-mode .icon-button { width: 40px; min-height: 40px; padding: 8px; }
+.studio-mode :is(button,a,input,select):focus-visible { outline-color: #24634f80; }
+.workspace-tabs { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid #e2e8e4; border-radius: 10px; background: #fff; }
+.workspace-tabs a { padding: 7px 12px; border-radius: 7px; font-size: 11px; white-space: nowrap; color: #61726a; }
+.workspace-tabs a[aria-current] { color: #fff; background: #24634f; }
+.studio-shell .panel { background: #fff; border: 1px solid #e2e8e4; border-radius: 16px; padding: 28px; }
+.studio-shell .metrics { gap: 16px; margin-bottom: 24px; }
+.studio-shell .metric { background: #fff; border-color: #e2e8e4; border-radius: 12px; padding: 20px 24px; min-height: 128px; }
+.studio-shell .metric > span { font-size: 12px; }
+.studio-shell .metric strong { font-size: 30px; margin: 8px 0 4px; color: #20372e; }
+.studio-shell .metric small { font-size: 11px; }
+.studio-shell .overview-grid { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
+.studio-shell .stack { gap: 24px; }
+.studio-shell .note { background: #e9f0ec; border-radius: 12px; padding: 24px; }
+.studio-shell .note h3 { color: #24634f; font-size: 13px; }
+.studio-shell .note p { color: #53685c; font-size: 12px; }
+.studio-shell .note code { overflow-wrap: anywhere; }
+.studio-shell .clients-grid { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
+.studio-shell .booking-grid { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 24px; }
+.studio-shell .field { margin-bottom: 20px; gap: 8px; }
+.studio-shell .field > span { font-size: 13px; color: #61726a; }
+.studio-mode input:not([type=checkbox]), .studio-mode select { min-height: 46px; border-color: #dce5df; border-radius: 8px; font-size: 13px; padding: 11px 12px; background: #fff; color: #20372e; }
+.studio-mode input[readonly] { background: #f4f6f5; color: #61726a; }
+.studio-shell form > button.primary { width: 100%; min-height: 48px; margin-top: 4px; }
+.studio-shell .two-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.studio-shell .table-wrap { border: 1px solid #e7ece8; border-radius: 10px; }
+.studio-shell table { font-size: 12px; white-space: normal; }
+.studio-shell th { background: #f4f6f5; color: #61726a; font-size: 11px; font-weight: 500; padding: 14px 16px; white-space: nowrap; }
+.studio-shell td { padding: 18px 16px; border-color: #edf0ee; line-height: 1.6; vertical-align: middle; }
+.studio-shell tbody tr:hover { background: #f7faf8; }
+.studio-shell .text-button { background: transparent; border: 0; padding: 0; min-height: 24px; text-align: left; color: #24634f; justify-content: start; }
+.studio-shell .text-button:hover { text-decoration: underline; }
+.studio-shell .studio-subline { font-size: 11px; color: #61726a; margin-top: 4px; }
+.studio-mode .badge { background: #e9f0ec; color: #24634f; border-radius: 6px; padding: 5px 9px; font-size: 11px; }
+.studio-shell .package-alert + .package-alert { border-top: 1px solid #edf0ee; }
+.studio-shell .empty { padding: 40px 20px; font-size: 13px; line-height: 1.7; }
+.studio-payment-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
+.studio-payment-summary { border-radius: 16px; background: #e9f0ec; padding: 28px; }
+.studio-payment-summary h2 { font-size: 16px; margin-bottom: 24px; }
+.studio-payment-summary .studio-summary-product { font-size: 24px; line-height: 1.35; letter-spacing: -.5px; margin-bottom: 16px; }
+.studio-summary-price { display: block; font-size: 30px; color: #1c493d; letter-spacing: -.8px; }
+.studio-summary-method { display: block; color: #61726a; font-size: 12px; margin-top: 4px; }
+.studio-summary-visits { font-size: 13px; margin: 20px 0; color: #24634f; }
+.studio-payment-summary dl { display: grid; grid-template-columns: 1fr; gap: 4px; margin: 20px 0 0; font-size: 12px; }
+.studio-payment-summary dt { color: #61726a; }
+.studio-payment-summary dd { margin: 0 0 12px; overflow-wrap: anywhere; }
+.studio-summary-footer { border-top: 1px solid #ceddd3; padding-top: 20px; margin-top: 20px; }
+.studio-summary-footer h3 { font-size: 13px; margin-bottom: 8px; }
+.studio-summary-footer p, .studio-summary-placeholder { color: #53685c; font-size: 12px; line-height: 1.7; }
+.studio-summary-footer small { font-size: 11px; margin-top: 16px; }
+.studio-package-list { margin-top: 28px; }
+.studio-shell .section-header select { width: auto; max-width: 220px; }
+.studio-shell .section-header h2 { margin: 0; }
+.studio-shell .studio-calendar .week-toolbar { align-items: center; flex-direction: row; }
+.studio-shell .week-toolbar button { min-height: 36px; padding: 8px 12px; }
+.studio-shell .calendar-time-scroll { border-radius: 10px; }
+.studio-shell .calendar-free-slot { border-radius: 0; padding: 0; height: 48px; min-height: 48px; }
+.studio-shell .studio-calendar > .muted { margin-bottom: 16px; }
+.studio-shell .calendar-free-slot:hover { background: #f3f8f5; }
+.studio-shell .calendar-grid-event { background: #e9f2ed; border-color: #b9d2c3; color: #20372e; border-radius: 7px; min-height: 0; padding: 4px 5px; gap: 3px; }
+.studio-shell .calendar-grid-event.is-completed { background: #eef1ef; border-color: #d7e0da; }
+.studio-shell .calendar-grid-event.is-cancelled { background: #f2f2f2; border-color: #ddd; }
+.studio-mode dialog { width: min(640px, calc(100vw - 40px)); max-width: 640px; border: 1px solid #e2e8e4; border-radius: 18px; padding: 32px; color: #20372e; max-height: 90dvh; overflow: auto; }
+.studio-mode dialog::backdrop { background: #14282080; backdrop-filter: blur(3px); }
+.studio-mode dialog h2 { font-size: 22px; letter-spacing: -.4px; margin-bottom: 24px; }
+.studio-mode dialog h3 { margin-top: 20px; }
+.studio-mode dialog .dialog-actions { padding-top: 20px; margin-top: 24px; border-top: 1px solid #e2e8e4; }
+.studio-mode .calendar-dialog { width: min(760px, calc(100vw - 40px)); max-width: 760px; }
+.studio-mode .calendar-dialog .note { background: #e9f0ec; padding: 16px; border-radius: 10px; }
+.studio-mode .calendar-dialog .field { margin-bottom: 8px; }
+.studio-mode .calendar-dialog .field > span { font-size: 13px; color: #61726a; }
+.studio-mode .calendar-dialog #session-create-submit { width: 100%; margin-top: 20px; }
+.studio-mode .calendar-dialog .calendar-participant { font-size: 13px; }
+.studio-mode .calendar-dialog input[type=checkbox] { accent-color: #24634f; }
+.studio-mode .error { color: #a0353a; background: #fff0f0; border-radius: 10px; }
+@media (min-width: 1600px) { .studio-shell #main { margin: 0 auto; } }
+@media (max-width: 1200px) {
+  .studio-shell #main { padding: 32px; }
+  .studio-shell .page-header { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .studio-shell .clients-grid, .studio-shell .overview-grid { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); }
+  .studio-shell .panel { padding: 24px; }
+  .studio-payment-layout, .studio-shell .booking-grid { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); }
+  .studio-shell .metric { padding: 18px; }
+}
+@media (max-width: 1000px) {
+  .studio-shell { grid-template-columns: 208px minmax(0, 1fr); }
+  .studio-shell #main { padding: 28px 24px; }
+  .studio-shell .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .studio-payment-layout, .studio-shell .clients-grid, .studio-shell .booking-grid, .studio-shell .overview-grid { grid-template-columns: 1fr; }
+  .studio-shell .studio-calendar .week-toolbar { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 640px) {
+  .studio-shell { display: block; }
+  .studio-shell .mobile-header { background: #182b27; border: 0; color: #fff; height: 64px; }
+  .studio-shell .mobile-header .brand { font-size: 18px; letter-spacing: -.4px; }
+  .studio-shell .mobile-header .icon-button { background: #ffffff18; color: #fff; }
+  .studio-shell.menu-open .sidebar { top: 64px; height: calc(100dvh - 64px); background: #182b27; width: min(320px, 100vw); padding: 24px 16px; box-shadow: 40px 0 100px #14282060; }
+  .studio-shell #main { padding: 24px 16px 40px; }
+  .studio-shell h1 { font-size: 24px; }
+  .studio-shell .page-header { margin-bottom: 24px; }
+  .studio-shell .page-header .actions { gap: 8px; }
+  .studio-shell .page-header :is(button,.button) { font-size: 12px; padding: 10px 12px; }
+  .workspace-tabs a { padding: 7px 10px; }
+  .studio-shell .panel, .studio-payment-summary { padding: 20px; border-radius: 14px; }
+  .studio-shell .metric { padding: 16px; min-height: 120px; }
+  .studio-shell .metric strong { font-size: 28px; }
+  .studio-shell .metric > span { font-size: 11px; }
+  .studio-shell .metrics { gap: 12px; }
+  .studio-shell .two-fields { grid-template-columns: 1fr; gap: 0; }
+  .studio-shell .table-wrap table { min-width: 580px; }
+  .studio-shell td, .studio-shell th { padding: 14px 12px; }
+  .studio-shell .studio-table-hint { font-size: 11px; margin-bottom: 12px; }
+  .studio-shell .section-header { flex-wrap: wrap; }
+  .studio-shell .section-header select { width: auto; max-width: 180px; font-size: 12px; }
+  .studio-mode dialog, .studio-mode .calendar-dialog { width: calc(100vw - 24px); padding: 24px 20px; border-radius: 16px; }
+  .studio-mode dialog h2 { font-size: 20px; }
+  .studio-mode .calendar-dialog .two-fields { grid-template-columns: 1fr; }
+}

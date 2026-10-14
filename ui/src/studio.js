@@ -90,22 +90,26 @@ export class StudioUi {
     return table(['Клиент / пакет','Доступно','Резерв','Использовано','До','Статус'],packages.map(membership=>`<tr><td>${e(this.clientName(relationId(membership,'person')))}<small class="studio-subline">${e(membership.name)}</small></td><td>${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}</td><td>${e(membership.visitsReserved)}</td><td>${e(membership.visitsConsumed)}</td><td>${e(membership.expiresOn||'—')}</td><td><span class="badge">${e(status(membership.status))}</span></td></tr>`));
   }
   packages() {
-    this.page(this.header('Пакеты и оплата','Пакет создаётся только через подтверждение оплаты в CRM')+`<div class="prepaid-grid"><section class="panel"><h2>Оформить оплаченный пакет</h2><form id="studio-payment-form">
+    this.page(this.header('Пакеты и оплата','Оформление полученной оплаты и пакетов клиентов')+`<div class="studio-payment-layout"><section class="panel"><h2>Оформить оплаченный пакет</h2><form id="studio-payment-form">
       ${field('Клиент',`<select name="personId" required>${options(this.data.clients,studioPersonName)}</select>`)}
       ${field('Продукт',`<select name="productId" required>${options(eligibleProducts(this.data.products),product=>product.name+' · '+money(currencyAmount(product.price)))}</select>`)}
-      <p id="studio-product-details" class="note">Выберите продукт: стоимость и посещения задаются CRM.</p>
+      <div class="two-fields">
       ${field('Когда оплачено','<input name="paidAt" type="datetime-local" required>')}
       ${field('Способ оплаты','<select name="paymentMethod"><option value="CASH">Наличные</option><option value="SBP">СБП</option><option value="CARD">Карта</option></select>')}
+      </div>
       ${field('Номер чека (необязательно)','<input name="fiscalReceiptId" maxlength="200">')}
       <div id="studio-form-error" class="error" role="alert" hidden></div><button class="primary" type="submit">Подтвердить оплату и создать пакет</button></form></section>
-      <section class="panel packages-panel"><div class="section-header"><h2>Пакеты клиентов</h2><select id="studio-package-filter" aria-label="Статус пакета"><option value="all">Все</option><option value="ACTIVE">Активные</option><option value="EXHAUSTED">Использованные</option></select></div><div id="studio-packages"></div></section></div>`);
+      <aside class="studio-payment-summary" aria-label="Итог оформления"><h2>Итог оформления</h2><div id="studio-product-details" aria-live="polite"></div><div class="studio-summary-footer"><h3>Что произойдёт после оплаты</h3><p>В CRM появятся оплата и пакет, начислятся посещения. Операция будет записана в журнал событий.</p><small>Подтверждайте только уже полученную оплату.</small></div></aside></div>
+      <section class="panel packages-panel studio-package-list"><div class="section-header"><h2>Пакеты клиентов</h2><select id="studio-package-filter" aria-label="Статус пакета"><option value="all">Все</option><option value="ACTIVE">Активные</option><option value="EXHAUSTED">Использованные</option></select></div><div id="studio-packages"></div></section>`);
     const form=document.querySelector('#studio-payment-form');
     form.personId.value=new URLSearchParams(location.hash.split('?')[1]||'').get('client')||'';
     const now=new Date();form.paidAt.value=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16);
-    form.productId.onchange=()=>{
+    const updateSummary=()=>{
       const product=this.product(form.productId.value);
-      document.querySelector('#studio-product-details').textContent=product?`${product.visitsIncluded} посещений · ${money(currencyAmount(product.price))} · срок ${product.validityDays||'без ограничения'} дней`:'Выберите продукт.';
+      const method={CASH:'Наличные',SBP:'СБП',CARD:'Карта'}[form.paymentMethod.value];
+      document.querySelector('#studio-product-details').innerHTML=product?`<h3 class="studio-summary-product">${e(product.name)}</h3><strong class="studio-summary-price">${e(money(currencyAmount(product.price)))}</strong><span class="studio-summary-method">${e(method)}</span><p class="studio-summary-visits">+${e(product.visitsIncluded)} посещений после оплаты</p><dl><dt>Клиент</dt><dd>${form.personId.value?e(this.clientName(form.personId.value)):'Не выбран'}</dd><dt>Срок пакета</dt><dd>${product.validityDays?e(product.validityDays)+' дней':'Без ограничения'}</dd></dl>`:'<p class="studio-summary-placeholder">Выберите клиента и продукт. Здесь появятся стоимость, посещения и срок пакета.</p>';
     };
+    form.productId.onchange=updateSummary;form.personId.onchange=updateSummary;form.paymentMethod.onchange=updateSummary;updateSummary();
     const draw=()=>{const filter=document.querySelector('#studio-package-filter').value;document.querySelector('#studio-packages').innerHTML=this.packageTable(this.data.packages.filter(membership=>filter==='all'||membership.status===filter));};
     draw();document.querySelector('#studio-package-filter').onchange=draw;
     this.restore('payment',form,'/studio/package-payments/confirm');
