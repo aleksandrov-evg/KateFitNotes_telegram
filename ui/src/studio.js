@@ -1,6 +1,6 @@
 import {escapeHtml as e, money} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
-import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation} from './studio-domain.js';
+import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate} from './studio-domain.js';
 
 let fieldSequence = 0;
 const field = (label, input) => {
@@ -134,11 +134,15 @@ export class StudioUi {
       <div id="studio-form-error" class="error" role="alert" hidden></div><button class="primary" type="submit">Проверить списание</button></form></section>
       <section class="panel"><h2>Предпросмотр</h2><div id="studio-preview">${empty('Выберите клиента и пакет. До подтверждения посещение не списывается.')}</div></section></div>`);
     const form=document.querySelector('#studio-attendance-form');
+    const linkedSessionId=new URLSearchParams(location.hash.split('?')[1]||'').get('session');
+    const linkedSession=this.data.sessions.find(session=>session.id===linkedSessionId);
+    if(linkedSession)form.startsAt.value=calendarDate(linkedSession.startsAt)+'T'+new Date(linkedSession.startsAt).toLocaleTimeString('en-GB',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit'});
     const updateSession=()=>{
       const membership=this.membership(form.membershipId.value),product=this.product(relationId(membership,'product'));
       const startsAt=new Date(form.startsAt.value),duration=Number(product?.durationMinutes);
       const candidates=Number.isFinite(startsAt.getTime())&&duration>0?this.data.sessions.filter(session=>session.status==='COMPLETED'&&session.sessionFormat===product.sessionFormat&&new Date(session.startsAt).getTime()===startsAt.getTime()&&new Date(session.endsAt).getTime()===startsAt.getTime()+duration*60000):[];
       form.existingClassSessionId.innerHTML='<option value="">Создать историческое занятие</option>'+candidates.map(session=>`<option value="${e(session.id)}">${e(session.name||date(session.startsAt))}</option>`).join('');
+      if(linkedSessionId&&candidates.some(session=>session.id===linkedSessionId))form.existingClassSessionId.value=linkedSessionId;
     };
     const update=()=>{const packages=personPackages(this.data.packages,form.personId.value).filter(membership=>membership.status==='ACTIVE'&&['GROUP_PACKAGE','PERSONAL'].includes(this.product(relationId(membership,'product'))?.category));form.membershipId.innerHTML=options(packages,membership=>membership.name+' · доступно '+membership.visitsAvailable);updateSession();};
     form.personId.value=new URLSearchParams(location.hash.split('?')[1]||'').get('client')||'';
@@ -150,6 +154,7 @@ export class StudioUi {
       event.preventDefault(); const button=form.querySelector('[type=submit]');
       button.disabled=true;
       try {
+        if(linkedSessionId&&form.existingClassSessionId.value!==linkedSessionId)throw new Error('Выберите пакет, соответствующий формату, времени и длительности выбранной тренировки.');
         const membership=this.membership(form.membershipId.value);
         const body=attendancePayload(Object.fromEntries(new FormData(form)),membership,this.product(relationId(membership,'product')),createOperationId());
         const snapshot=JSON.stringify(Object.fromEntries(new FormData(form)));

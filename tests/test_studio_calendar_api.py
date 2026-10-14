@@ -11,6 +11,7 @@ from tests.test_studio_api import SETTINGS, ATTENDANCE
 
 BOOKING = {"personId": ATTENDANCE["personId"], "membershipId": ATTENDANCE["membershipId"], "classSessionId": "00000000-0000-4000-8000-000000000003", "idempotencyKey": "calendar-book"}
 CANCELLATION = {"bookingId": "00000000-0000-4000-8000-000000000004", "cancelledAt": "2026-01-01T09:00:00Z", "idempotencyKey": "calendar-cancel"}
+SESSION = {"name": "Реформер", "sessionFormat": "GROUP_REFORMER", "startsAt": "2026-10-15T10:00:00+03:00", "durationMinutes": 55, "capacity": 4, "status": "PLANNED", "idempotencyKey": "session-create"}
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ def calendar_api():
         assert request.headers["authorization"] == "Bearer server-api-key"
         if request.url.path == "/rest/studioEvents":
             return httpx.Response(200, json={"data": {"studioEvents": [{"id": "event", "eventType": "BOOKING_CREATED"}]}, "pageInfo": {"hasNextPage": False}})
-        assert request.url.path in {"/s/studio/bookings/create", "/s/studio/bookings/cancel"}
+        assert request.url.path in {"/s/studio/bookings/create", "/s/studio/bookings/cancel", "/s/studio/sessions/create"}
         return httpx.Response(200, json={"success": True, "duplicate": False})
     studio = StudioCrm(SETTINGS, httpx.Client(transport=httpx.MockTransport(handle)))
     with TestClient(create_app(API_SETTINGS, FakeApiRepo(), studio)) as browser:
@@ -46,3 +47,19 @@ def test_calendar_event_read_and_input_validation(calendar_api):
     assert browser.post("/api/v1/studio/bookings/create", json={**BOOKING, "recordedBy": "user"}, headers=headers).status_code == 422
     assert browser.post("/api/v1/studio/bookings/cancel", json={**CANCELLATION, "cancelledAt": "2026-01-01T09:00:00"}, headers=headers).status_code == 422
     assert len(requests) == count
+
+
+def test_session_creation_uses_authenticated_command(calendar_api):
+    browser, requests, headers = calendar_api
+    assert browser.post("/api/v1/studio/sessions/create", json=SESSION).status_code == 401
+    assert browser.post("/api/v1/studio/sessions/create", json=SESSION, headers=headers).status_code == 200
+    assert requests[-1].url.path == "/s/studio/sessions/create"
+    assert json.loads(requests[-1].content)["idempotencyKey"] == SESSION["idempotencyKey"]
+    assert not any(request.url.path == "/rest/classSessions" for request in requests)
+
+
+@pytest.mark.parametrize("change", [{"startsAt": "2026-10-15T10:00:00"}, {"durationMinutes": 0}, {"durationMinutes": 1.5}, {"capacity": 101}, {"status": "CANCELLED"}, {"recordedBy": "operator"}])
+def test_session_body_validation_before_crm(calendar_api, change):
+    browser, requests, headers = calendar_api
+    assert browser.post("/api/v1/studio/sessions/create", json={**SESSION, **change}, headers=headers).status_code == 422
+    assert requests == []

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Api} from '../src/api.js';
 import {StudioUi} from '../src/studio.js';
-import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships} from '../src/studio-domain.js';
+import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from '../src/studio-domain.js';
 
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};};
 const json=body=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
@@ -32,6 +32,26 @@ test('карточка предлагает принадлежащий клие�
   const valid={id:'valid',personId:'person',productId:'product',status:'ACTIVE',visitsAvailable:1,activatedAt:'2026-10-01T10:00:00Z',expiresOn:'2026-10-31'};
   const packages=[valid,{...valid,id:'other',personId:'other'},{...valid,id:'expired',expiresOn:'2026-10-14'},{...valid,id:'empty',visitsAvailable:0}];
   assert.deepEqual(sessionMemberships(packages,[{id:'product',category:'GROUP_PACKAGE',sessionFormat:'GROUP_REFORMER'}],'person',session).map(item=>item.id),['valid']);
+});
+test('создание будущего и прошедшего занятия использует московское время без списания',()=>{
+  const now=new Date('2026-10-14T12:00:00Z');
+  const values={name:' Тренировка ',sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T10:00',durationMinutes:'55',capacity:'4'};
+  const future=sessionCreationPayload(values,'stable',now);
+  assert.equal(future.startsAt,'2026-10-15T07:00:00.000Z');assert.equal(future.status,'PLANNED');
+  assert.equal(future.personId,undefined);assert.equal(future.membershipId,undefined);
+  assert.throws(()=>sessionCreationPayload({...values,startsAt:'2026-10-13T10:00'},'stable',now),/Подтвердите/);
+  assert.equal(sessionCreationPayload({...values,startsAt:'2026-10-13T10:00',pastConfirmed:'on'},'stable',now).status,'COMPLETED');
+  assert.equal(sessionTimeState('2026-10-14T11:30:00Z',60,now),'CONFIRMED');
+});
+test('временная сетка отображает длительность и раскладывает пересечения по полосам',()=>{
+  const intervals=calendarSessionLayout([
+    {id:'one',startsAt:'2026-10-14T09:00:00+03:00',endsAt:'2026-10-14T10:00:00+03:00'},
+    {id:'two',startsAt:'2026-10-14T09:30:00+03:00',endsAt:'2026-10-14T10:30:00+03:00'},
+  ],'2026-10-14');
+  assert.equal(intervals[0].top,192);assert.equal(intervals[0].height,96);
+  assert.equal(intervals[0].laneCount,2);assert.notEqual(intervals[0].lane,intervals[1].lane);
+  const crossing=calendarSessionLayout([{id:'overnight',startsAt:'2026-10-13T23:00:00+03:00',endsAt:'2026-10-14T08:00:00+03:00'}],'2026-10-14');
+  assert.equal(crossing[0].top,0);assert.equal(crossing[0].height,96);
 });
 
 test('Gelios использует собственную навигацию и UUID, не числовые id Terfit',()=>{

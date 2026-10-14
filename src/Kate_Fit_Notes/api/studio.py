@@ -203,6 +203,25 @@ class CreateBookingRequest(BaseModel):
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
 
 
+class CreateSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=200)
+    session_format: Literal["GROUP_REFORMER", "INTRO_REFORMER", "PERSONAL_EQUIPMENT", "SPLIT_EQUIPMENT", "MAT_PILATES", "STRETCHING", "TRX"] = Field(alias="sessionFormat")
+    starts_at: datetime = Field(alias="startsAt")
+    duration_minutes: int = Field(alias="durationMinutes", ge=1, le=1440, strict=True)
+    capacity: int = Field(ge=1, le=100, strict=True)
+    status: Literal["PLANNED", "CONFIRMED", "COMPLETED"]
+    past_confirmed: bool = Field(default=False, alias="pastConfirmed", strict=True)
+    idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
+
+    @field_validator("starts_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("Укажите время с часовым поясом")
+        return value
+
+
 class CancelBookingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     booking_id: UUID = Field(alias="bookingId")
@@ -263,6 +282,11 @@ def confirm_package_payment(body: PackagePaymentRequest, username: str = Depends
 @router.post("/bookings/create")
 def create_booking(body: CreateBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     return studio.command("/studio/bookings/create", body.model_dump(mode="json", by_alias=True))
+
+
+@router.post("/sessions/create")
+def create_session(body: CreateSessionRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.command("/studio/sessions/create", body.model_dump(mode="json", by_alias=True))
 
 
 @router.post("/bookings/cancel")
