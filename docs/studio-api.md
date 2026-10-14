@@ -93,6 +93,8 @@ npm --prefix ui run test:browser
 
 PLAYWRIGHT_MODULE может указывать абсолютный путь к имеющемуся playwright/index.mjs. UI_SMOKE_URL меняет адрес локального UI; UI_SMOKE_ARTIFACT_DIR — существующий каталог для скриншотов (по умолчанию системный временный каталог).
 
+Регрессия HTTP/IP-адреса: npm --prefix ui run test:browser:http. Тест открывает полностью перехваченный HTTP-origin (без локального сервера), где crypto.randomUUID отсутствует. Проверяет открытие подтверждения и единственный запрос оплаты с UUID v4; реальные оплаты не создаются. Генератор использует crypto.getRandomValues, без Math.random. Для внешнего размещения всё равно нужен HTTPS: JWT/контакты не следует передавать по незащищённой сети.
+
 ## Выпуск
 
 После проверки CRM приложения на staging пересобрать отдельно KateFitNotes API (docker-compose.api.yml) и UI (docker-compose.ui.yml), сохранив действующие секреты/SQL-настройки. В Dokploy это Deploy соответствующих сервисов после сохранения Environment. Одного twenty apply недостаточно: он не обновляет контейнеры KateFitNotes.

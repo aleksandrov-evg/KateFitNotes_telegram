@@ -1,5 +1,5 @@
 import {escapeHtml as e, money} from './domain.js';
-import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, attendancePayload, PendingStudioOperation} from './studio-domain.js';
+import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation} from './studio-domain.js';
 
 let fieldSequence = 0;
 const field = (label, input) => {
@@ -72,8 +72,10 @@ export class StudioUi {
     this.restore('client',form,'/studio/clients');
     form.onsubmit=event=>{
       event.preventDefault();
-      const body={...Object.fromEntries(new FormData(form)),clientId:crypto.randomUUID()};
-      this.submit('client',body,'/studio/clients');
+      try {
+        const body={...Object.fromEntries(new FormData(form)),clientId:createOperationId()};
+        this.submit('client',body,'/studio/clients');
+      } catch(error) { this.errorBox(error,'#studio-form-error'); }
     };
   }
   clientDetails(id) {
@@ -107,12 +109,15 @@ export class StudioUi {
     this.restore('payment',form,'/studio/package-payments/confirm');
     form.onsubmit=event=>{
       event.preventDefault();
+      try {
       const values=Object.fromEntries(new FormData(form)),product=this.product(values.productId);
-      if(!product)return;
+      if(!product)throw new Error('Выберите доступный продукт.');
       const paidAt=new Date(values.paidAt);
+      if(!Number.isFinite(paidAt.getTime()))throw new Error('Укажите корректную дату оплаты.');
       if(paidAt>new Date())return this.errorBox(new Error('Оплата не может быть в будущем.'),'#studio-form-error');
-      const body={personId:values.personId,productId:product.id,paidAt:paidAt.toISOString(),paymentMethod:values.paymentMethod,amount:currencyAmount(product.price),idempotencyKey:crypto.randomUUID(),...(values.fiscalReceiptId.trim()?{fiscalReceiptId:values.fiscalReceiptId.trim()}:{})};
+      const body={personId:values.personId,productId:product.id,paidAt:paidAt.toISOString(),paymentMethod:values.paymentMethod,amount:currencyAmount(product.price),idempotencyKey:createOperationId(),...(values.fiscalReceiptId.trim()?{fiscalReceiptId:values.fiscalReceiptId.trim()}:{})};
       this.showDialog('Подтвердить оплату',`<p>${e(this.clientName(body.personId))}</p><p>${e(product.name)} · ${e(money(body.amount))} · ${product.visitsIncluded} посещений</p><p>Подтверждайте только уже полученную оплату.</p>`,()=>this.submit('payment',body,'/studio/package-payments/confirm',true));
+      } catch(error) { this.errorBox(error,'#studio-form-error'); }
     };
   }
   attendance() {
@@ -144,7 +149,7 @@ export class StudioUi {
       button.disabled=true;
       try {
         const membership=this.membership(form.membershipId.value);
-        const body=attendancePayload(Object.fromEntries(new FormData(form)),membership,this.product(relationId(membership,'product')),crypto.randomUUID());
+        const body=attendancePayload(Object.fromEntries(new FormData(form)),membership,this.product(relationId(membership,'product')),createOperationId());
         const snapshot=JSON.stringify(Object.fromEntries(new FormData(form)));
         const result=await this.api.request('/studio/attendance/preview',{method:'POST',body});
         if(!form.isConnected||snapshot!==JSON.stringify(Object.fromEntries(new FormData(form))))return;

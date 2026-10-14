@@ -9,6 +9,16 @@ export const relationId = (record, relation) => record?.[relation + 'Id'] || rec
 export const currencyAmount = value => Number(value?.amountMicros || 0) / 1000000;
 export const eligibleProducts = products => products.filter(product => product.isActive && ['GROUP_PACKAGE','PERSONAL'].includes(product.category));
 export const personPackages = (packages, personId) => packages.filter(record => relationId(record,'person') === personId);
+export const createOperationId = (cryptoProvider = globalThis.crypto) => {
+  if (typeof cryptoProvider?.randomUUID === 'function') return cryptoProvider.randomUUID();
+  if (typeof cryptoProvider?.getRandomValues !== 'function') throw new Error('Браузер не поддерживает безопасное создание ключа операции. Откройте UI через HTTPS или обновите браузер.');
+  // HTTP LAN addresses lack randomUUID, but still support cryptographic random bytes.
+  const bytes = cryptoProvider.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2,'0')).join('');
+  return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+};
 export const attendancePayload = (values, membership, product, key) => {
   const startsAt = new Date(values.startsAt);
   const duration = Number(product?.durationMinutes);

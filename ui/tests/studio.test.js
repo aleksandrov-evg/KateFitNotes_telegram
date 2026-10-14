@@ -2,10 +2,21 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Api} from '../src/api.js';
 import {StudioUi} from '../src/studio.js';
-import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,attendancePayload,PendingStudioOperation} from '../src/studio-domain.js';
+import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation} from '../src/studio-domain.js';
 
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};};
 const json=body=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
+
+test('ключ операции работает на HTTP без crypto.randomUUID и остаётся UUID v4',()=>{
+  const cryptoProvider={getRandomValues:bytes=>globalThis.crypto.getRandomValues(bytes)};
+  const keys=Array.from({length:1000},()=>createOperationId(cryptoProvider));
+  assert.equal(new Set(keys).size,1000);
+  assert.ok(keys.every(key=>/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(key)));
+});
+test('генерация использует native UUID либо явно сообщает об отсутствии криптографии',()=>{
+  assert.equal(createOperationId({randomUUID:()=> 'native-id'}),'native-id');
+  assert.throws(()=>createOperationId({}),/HTTPS/);
+});
 
 test('Gelios использует собственную навигацию и UUID, не числовые id Terfit',()=>{
   assert.ok(studioNav.every(([id])=>id.startsWith('gelios/')));
