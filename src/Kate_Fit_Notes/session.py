@@ -24,6 +24,8 @@ class ScenarioState:
     list_train: Any = None
     list_client: Any = None
     list_time: Any = None
+    list_booking: Any = None
+    booking: Any = None
     is_group: bool | None = None
     train_price: Any = None
     list_multi_select: Any = None
@@ -32,6 +34,7 @@ class ScenarioState:
     set_is_complete_true: bool = False
     summ: int | None = None
     count_train: int | None = None
+    prepaid_date: Any = None
     allow_add_client: bool = False
     week_dates: dict[str, Any] = field(default_factory=empty_week_dates)
 

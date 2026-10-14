@@ -52,6 +52,9 @@ class BookingService:
             offset=offset,
         )
 
+    def delete_booking(self, schedule_id: Any) -> bool:
+        return self._repo.delete_booking(schedule_id)
+
     def suggest_personal_price(self, client_id: Any, type_train_id: Any) -> PersonalPriceHint:
         prepaid_price = self._prepaid.price_for_session(client_id, type_train_id)
         if prepaid_price is not None:

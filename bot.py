@@ -17,10 +17,14 @@ from src.Kate_Fit_Notes.bot_ui import (
     MENU_NEW_CLIENT,
     MENU_PERSONAL,
     MENU_REPORT,
+    MENU_SCHEDULE,
     back_to_menu_markup,
     booking_confirm_text,
+    booking_delete_confirm_text,
+    booking_list_markup,
     client_list_markup,
     confirm_markup,
+    delete_booking_markup,
     main_menu_markup,
     multi_client_markup,
     prepaid_confirm_text,
@@ -84,6 +88,13 @@ def _find_slot(slots: list | None, raw: str) -> datetime.time | None:
         if slot.strftime("%H:%M") == raw:
             return slot
     return None
+
+
+def _find_booking(rows: list[dict] | None, raw: str) -> dict | None:
+    booking_id = _as_int(raw)
+    if booking_id is None:
+        return None
+    return next((row for row in rows or [] if row.get("id") == booking_id), None)
 
 
 def _parse_iso_date(raw: str) -> datetime.date | None:
@@ -240,6 +251,46 @@ class BotApp:
             reply_markup=slots_markup(result),
         )
 
+    def show_bookings_for_date(self, message, selected_date: datetime.date) -> None:
+        state = self.sessions.get(message.chat.id)
+        state.date = selected_date
+        state.list_booking = self.booking_service.list_bookings(
+            date_from=selected_date, date_to=selected_date
+        )["items"]
+        state.operation = "choose_booking"
+        if not state.list_booking:
+            self.bot.send_message(message.chat.id, "На эту дату тренировок нет.")
+            return
+        self.bot.send_message(
+            message.chat.id,
+            "Выбери тренировку:",
+            reply_markup=booking_list_markup(state.list_booking),
+        )
+
+    def show_schedule_date(self, message, date: datetime.date | None = None) -> None:
+        state = self.sessions.get(message.chat.id)
+        state.operation = "choose_schedule_date"
+        days = week_days(date or datetime.date.today())
+        for index, day in enumerate(days):
+            state.week_dates[str(index)] = day
+        self.bot.send_message(
+            message.chat.id,
+            "Выбери дату:",
+            reply_markup=week_markup(days),
+        )
+
+    def show_prepaid_date(self, message, date: datetime.date | None = None) -> None:
+        state = self.sessions.get(message.chat.id)
+        state.operation = "choose_prepaid_date"
+        days = week_days(date or datetime.date.today())
+        for index, day in enumerate(days):
+            state.week_dates[str(index)] = day
+        self.bot.send_message(
+            message.chat.id,
+            "Выбери дату оплаты пакета:",
+            reply_markup=week_markup(days),
+        )
+
     def get_text_messages(self, message) -> None:
         if not self._is_allowed(message.chat.id):
             self._deny(message.chat.id)
@@ -274,7 +325,8 @@ class BotApp:
             logger.info("Выбран пункт «Новый клиент»")
             self.bot.send_message(message.from_user.id, "Отправь мне контакт и я добавлю его в клиенты")
             state.allow_add_client = True
-        elif message.text == "📓 Расписание тренировок":
+        elif message.text == MENU_SCHEDULE:
+            self.sessions.clear(message.chat.id, "manage_schedule")
             self.bot.send_message(
                 message.chat.id,
                 "Поработаем с расписанием?",
@@ -317,7 +369,7 @@ class BotApp:
                 prepaid = parse_prepaid(message.text)
                 if prepaid is not None:
                     state.summ, state.count_train = prepaid
-                    self.confirm_add_in_accounting(message)
+                    self.show_prepaid_date(message)
                 else:
                     self.universal_text_input(
                         text_message=(
@@ -370,7 +422,9 @@ class BotApp:
         state.operation = "confirm_add_accounting"
         self.bot.send_message(
             message.chat.id,
-            prepaid_confirm_text(state.client, state.train, state.summ, state.count_train),
+            prepaid_confirm_text(
+                state.client, state.train, state.summ, state.count_train, state.prepaid_date
+            ),
             parse_mode="Markdown",
             reply_markup=confirm_markup(),
         )
@@ -476,6 +530,26 @@ class BotApp:
                         command="total_summ_and_number_train",
                         message=call.message,
                     )
+                case "choose_prepaid_date":
+                    if call.data == "prev_week":
+                        self.bot.delete_message(call.message.chat.id, call.message.id)
+                        self.show_prepaid_date(
+                            call.message, shift_week(state.week_dates["0"], "prev")
+                        )
+                    elif call.data == "current_week":
+                        self.bot.delete_message(call.message.chat.id, call.message.id)
+                        self.show_prepaid_date(call.message)
+                    elif call.data == "next_week":
+                        self.bot.delete_message(call.message.chat.id, call.message.id)
+                        self.show_prepaid_date(
+                            call.message, shift_week(state.week_dates["0"], "next")
+                        )
+                    else:
+                        selected = _parse_iso_date(call.data)
+                        if selected is None:
+                            return
+                        state.prepaid_date = selected
+                        self.confirm_add_in_accounting(call.message)
                 case "confirm_add_accounting":
                     if call.data == "approve_add":
                         try:
@@ -484,6 +558,7 @@ class BotApp:
                                 type_train_id=state.train["id"],
                                 summ=state.summ,
                                 count=state.count_train,
+                                paid_date=state.prepaid_date,
                             )
                             self.bot.send_message(call.message.chat.id, "✅Запись добавлена!✅")
                         except InvalidPrepaidError:
@@ -502,6 +577,59 @@ class BotApp:
                     elif call.data == "cancel_add":
                         self.bot.send_message(call.message.chat.id, "Действие отменено!")
                         self.start(call.message)
+        elif process == "manage_schedule":
+            if operation is None:
+                if call.data == "show_schedule_today":
+                    self.show_bookings_for_date(call.message, datetime.date.today())
+                elif call.data == "show_schedule_date":
+                    self.show_schedule_date(call.message)
+                elif call.data == "show_schedule_client":
+                    self.bot.send_message(call.message.chat.id, "Просмотр по клиенту пока недоступен.")
+            elif operation == "choose_schedule_date":
+                if call.data == "prev_week":
+                    self.bot.delete_message(call.message.chat.id, call.message.id)
+                    self.show_schedule_date(call.message, shift_week(state.week_dates["0"], "prev"))
+                elif call.data == "current_week":
+                    self.bot.delete_message(call.message.chat.id, call.message.id)
+                    self.show_schedule_date(call.message, datetime.date.today())
+                elif call.data == "next_week":
+                    self.bot.delete_message(call.message.chat.id, call.message.id)
+                    self.show_schedule_date(call.message, shift_week(state.week_dates["0"], "next"))
+                else:
+                    selected = _parse_iso_date(call.data)
+                    if selected is not None:
+                        self.show_bookings_for_date(call.message, selected)
+            elif operation == "choose_booking":
+                booking = _find_booking(state.list_booking, call.data)
+                if booking is None:
+                    return
+                state.booking = booking
+                state.operation = "confirm_delete_booking"
+                self.bot.send_message(
+                    call.message.chat.id,
+                    booking_delete_confirm_text(booking),
+                    parse_mode="Markdown",
+                    reply_markup=delete_booking_markup(),
+                )
+            elif operation == "confirm_delete_booking":
+                if call.data == "approve_delete_booking":
+                    booking = state.booking
+                    try:
+                        deleted = booking is not None and self.booking_service.delete_booking(
+                            booking["id"]
+                        )
+                    except Exception:
+                        logger.exception("Ошибка удаления тренировки")
+                        self.bot.send_message(call.message.chat.id, "❌ Ошибка удаления тренировки.")
+                    else:
+                        if not deleted:
+                            self.bot.send_message(call.message.chat.id, "Тренировка уже удалена.")
+                        else:
+                            self.bot.send_message(call.message.chat.id, "✅ Тренировка удалена.")
+                    self.start(call.message)
+                elif call.data == "cancel_delete_booking":
+                    self.bot.send_message(call.message.chat.id, "Удаление отменено.")
+                    self.start(call.message)
         else:
             if state.operation == "choose_date":
                 if call.data == "prev_week":

@@ -40,6 +40,8 @@ class KateFitRepository(Protocol):
 
     def get_schedule_participants(self, schedule_id: Any) -> list[int]: ...
 
+    def delete_booking(self, schedule_id: Any) -> bool: ...
+
     def list_bookings(
         self,
         date_from: Any = None,
@@ -81,6 +83,7 @@ class KateFitRepository(Protocol):
         count_train: Any,
         price_per_train: Any,
         type_train_id: Any,
+        paid_date: Any = None,
     ) -> int | None: ...
 
     def get_active_prepaid_for_client(
@@ -246,6 +249,34 @@ class PostgresRepository:
         )
         return [int(row["client_id"]) for row in rows]
 
+    def delete_booking(self, schedule_id: Any) -> bool:
+        """Удаляет запись и участников; вновь открывает связанный пакет предоплаты."""
+        with self._pool.connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT accounting_id FROM main.schedule WHERE id = %s FOR UPDATE",
+                    (schedule_id,),
+                )
+                row = cur.fetchone()
+                logger.info("SQL %s", cur.statusmessage)
+                if row is None:
+                    return False
+                cur.execute(
+                    "DELETE FROM main.schedule_participant WHERE schedule_id = %s",
+                    (schedule_id,),
+                )
+                logger.info("SQL %s", cur.statusmessage)
+                cur.execute("DELETE FROM main.schedule WHERE id = %s", (schedule_id,))
+                logger.info("SQL %s", cur.statusmessage)
+                accounting_id = row["accounting_id"]
+                if accounting_id is not None:
+                    cur.execute(
+                        "UPDATE main.accounting SET is_complete = false WHERE id = %s",
+                        (accounting_id,),
+                    )
+                    logger.info("SQL %s", cur.statusmessage)
+        return True
+
     def list_bookings(
         self,
         date_from: Any = None,
@@ -403,16 +434,36 @@ class PostgresRepository:
         count_train: Any,
         price_per_train: Any,
         type_train_id: Any,
+        paid_date: Any = None,
     ) -> int | None:
         with self._pool.connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if paid_date is None:
+                    values = (
+                        client_id,
+                        summ,
+                        count_train,
+                        price_per_train,
+                        type_train_id,
+                    )
+                    created_at_sql = ACCOUNTING_NOW_SQL
+                else:
+                    values = (
+                        client_id,
+                        summ,
+                        count_train,
+                        paid_date,
+                        price_per_train,
+                        type_train_id,
+                    )
+                    created_at_sql = "%s"
                 cur.execute(
                     "INSERT INTO main.accounting "
                     "(client_id, summ, count_train, updated_at, created_at, "
                     "price_per_train, type_train_id) "
-                    f"VALUES (%s, %s, %s, {ACCOUNTING_NOW_SQL}, {ACCOUNTING_NOW_SQL}, %s, %s) "
+                    f"VALUES (%s, %s, %s, {ACCOUNTING_NOW_SQL}, {created_at_sql}, %s, %s) "
                     "RETURNING id",
-                    (client_id, summ, count_train, price_per_train, type_train_id),
+                    values,
                 )
                 logger.info("SQL %s", cur.statusmessage)
                 row = cur.fetchone()

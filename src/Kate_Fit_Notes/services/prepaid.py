@@ -28,6 +28,7 @@ class PrepaidService:
         type_train_id: Any,
         summ: Any,
         count: Any,
+        paid_date: Any = None,
     ) -> dict:
         try:
             count_train = int(count)
@@ -46,9 +47,14 @@ class PrepaidService:
             raise MultiplePrepaidError(len(active), [row["id"] for row in active])
 
         price = price_per_train(summ_value, count_train)
-        package_id = self._repo.insert_in_accounting(
-            client_id, summ_value, count_train, price, type_train_id
-        )
+        if paid_date is None:
+            package_id = self._repo.insert_in_accounting(
+                client_id, summ_value, count_train, price, type_train_id
+            )
+        else:
+            package_id = self._repo.insert_in_accounting(
+                client_id, summ_value, count_train, price, type_train_id, paid_date
+            )
         return {
             "id": package_id,
             "client_id": client_id,
@@ -59,6 +65,7 @@ class PrepaidService:
             "is_complete": False,
             "used_count": 0,
             "remaining": count_train,
+            "paid_date": paid_date,
         }
 
     def list_packages(
