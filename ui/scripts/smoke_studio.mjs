@@ -15,7 +15,7 @@ const data={
   clients:[{id:personId,name:{firstName:'Анна',lastName:'Тестовая'},phones:{primaryPhoneCallingCode:'+7',primaryPhoneNumber:'9210000000'},emails:{primaryEmail:'anna@example.com'}}],
   products:[{id:productId,name:'Реформер · 8 занятий',category:'GROUP_PACKAGE',isActive:true,price:{amountMicros:16000000000,currencyCode:'RUB'},visitsIncluded:8,durationMinutes:55,validityDays:30}],
   packages:[{id:membershipId,name:'Реформер · тестовый пакет',personId,productId,status:'ACTIVE',visitsGranted:8,visitsAvailable:8,visitsReserved:0,visitsConsumed:0,expiresOn:'2026-12-31'}],
-  bookings:[],sessions:[],transactions:[],
+  bookings:[],sessions:[],transactions:[],events:[],
 };
 const writes=[],recorded=new Set();
 let failRecord=true,configured=true;

@@ -1,4 +1,5 @@
 import {escapeHtml as e, money} from './domain.js';
+import {StudioCalendar} from './studio-calendar.js';
 import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation} from './studio-domain.js';
 
 let fieldSequence = 0;
@@ -17,6 +18,7 @@ export class StudioUi {
   constructor({api, page, header, notify, errorBox, showDialog}) {
     Object.assign(this,{api,page,header,notify,errorBox,showDialog});
     this.pending = new PendingStudioOperation();
+    this.calendar = new StudioCalendar(this);
     this.data = null; this.generation = 0; this.saving = false;
   }
   reset() { this.generation++; this.data=null; }
@@ -32,13 +34,13 @@ export class StudioUi {
       if (!this.data || force) {
         const configuration = await this.api.request('/studio/auth/status');
         if (!configuration.configured) throw new Error('CRM пока не подключена. На сервере нужны CRM_ENABLED, CRM_BASE_URL и CRM_API_KEY. Terfit продолжает работать.');
-        const resources = ['clients','products','packages','bookings','sessions','transactions'];
+        const resources = ['clients','products','packages','bookings','sessions','transactions','events'];
         const lists = await Promise.all(resources.map(resource=>this.api.studioRecords(resource)));
         if (run !== this.generation) return;
         this.data = Object.fromEntries(resources.map((resource,index)=>[resource,lists[index]]));
       }
       if (run !== this.generation) return;
-      ({overview:()=>this.overview(),clients:()=>this.clients(),packages:()=>this.packages(),attendance:()=>this.attendance(),bookings:()=>this.bookings(),transactions:()=>this.transactions()})[route]();
+      ({overview:()=>this.overview(),clients:()=>this.clients(),packages:()=>this.packages(),attendance:()=>this.attendance(),bookings:()=>this.bookings(),transactions:()=>this.transactions(),calendar:()=>this.calendar.render()})[route]();
       document.querySelector('.refresh').onclick=()=>this.render(this.route,true);
     } catch(error) {
       if(run!==this.generation)return;
@@ -52,7 +54,7 @@ export class StudioUi {
     this.page(this.header('Обзор Gelios','Клиенты, оплаченные пакеты и подтверждённые посещения','<a class="button primary" href="#gelios/attendance">+ Внести тренировку</a>')+
       `<div class="metrics">${[['Клиентов',this.data.clients.length,'в CRM'],['Активных пакетов',active.length,'оплаченные пакеты'],['Посещений',this.data.bookings.filter(booking=>booking.status==='ATTENDED').length,'подтверждено'],['Списаний',this.data.transactions.filter(transaction=>transaction.transactionType==='CONSUME').length,'в журнале CRM']].map(([label,value,note])=>`<section class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></section>`).join('')}</div>
       <div class="overview-grid"><section class="panel"><h2>Последние посещения</h2>${this.bookingTable(this.data.bookings.filter(booking=>booking.status==='ATTENDED').sort((a,b)=>String(b.recordedAt||b.bookedAt).localeCompare(String(a.recordedAt||a.bookedAt))).slice(0,8))}</section>
-      <aside class="stack"><section class="panel"><h2>Пакеты на исходе</h2>${active.filter(membership=>membership.visitsAvailable<=2).map(membership=>`<a class="package-alert" href="#gelios/packages"><span>${e(this.clientName(relationId(membership,'person')))}<small>${e(membership.name)}</small></span><span class="badge">${e(membership.visitsAvailable)} осталось</span></a>`).join('')||empty('Все пакеты в порядке')}</section><section class="note"><h3>Источник данных — CRM</h3><p>Остатки и списания вычисляет Twenty. Будущие бронирования и сплиты пока доступны в CRM, но не в этом интерфейсе.</p></section></aside></div>`);
+      <aside class="stack"><section class="panel"><h2>Пакеты на исходе</h2>${active.filter(membership=>membership.visitsAvailable<=2).map(membership=>`<a class="package-alert" href="#gelios/packages"><span>${e(this.clientName(relationId(membership,'person')))}<small>${e(membership.name)}</small></span><span class="badge">${e(membership.visitsAvailable)} осталось</span></a>`).join('')||empty('Все пакеты в порядке')}</section><section class="note"><h3>Источник данных — CRM</h3><p>Остатки и списания вычисляет Twenty. Участники будущих тренировок — в календаре. Сплиты и проведение обычных бронирований пока выполняются в CRM.</p></section></aside></div>`);
   }
   clients() {
     this.page(this.header('Клиенты Gelios','Контакты студии · отдельная база CRM')+`<div class="clients-grid"><section class="panel"><label class="search"><span class="sr-only">Поиск клиентов Gelios</span><input id="studio-search" type="search" placeholder="Имя, телефон или email"></label><div id="studio-client-list"></div></section>
@@ -165,7 +167,7 @@ export class StudioUi {
       return `<tr><td>${e(this.clientName(relationId(booking,'person')))}</td><td>${e(date(session?.startsAt))}</td><td>${e(this.membership(relationId(booking,'membership'))?.name||'—')}</td><td><span class="badge">${e(status(booking.status))}</span></td></tr>`;
     }));
   }
-  bookings() { this.page(this.header('Посещения Gelios','Записи CRM: подтверждённые, будущие и отменённые')+`<section class="panel">${this.bookingTable(this.data.bookings)}</section><p class="muted">Обычные будущие бронирования, их проведение и отмена пока выполняются в CRM.</p>`); }
+  bookings() { this.page(this.header('Посещения Gelios','Записи CRM: подтверждённые, будущие и отменённые')+`<section class="panel">${this.bookingTable(this.data.bookings)}</section><p class="muted">Состав будущих тренировок можно менять в календаре. Проведение обычных бронирований пока выполняется в CRM.</p>`); }
   transactions() {
     this.page(this.header('Журнал списаний','Начисления, резервы, списания и возвраты посещений')+`<section class="panel"><label class="field"><span>Тип операции</span><select id="studio-transaction-filter"><option value="all">Все операции</option><option value="CONSUME">Только списания</option></select></label><div id="studio-ledger"></div></section>`);
     const draw=()=>{

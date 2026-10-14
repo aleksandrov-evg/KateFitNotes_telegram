@@ -271,6 +271,7 @@ function renderReports() {
 }
 function showDialog(title,body,onConfirm,onError) {
   if(dialog.open)dialog.close();
+  dialog.classList.remove('calendar-dialog');
   dialog.innerHTML=`<h2 id="dialog-title">${title}</h2>${body}<div id="dialog-error" class="error" role="alert" hidden></div><div class="dialog-actions"><button id="dialog-cancel" class="secondary">${onConfirm?'Отменить':'Закрыть'}</button>${onConfirm?'<button id="dialog-submit" class="primary">Добавить</button>':''}</div>`;
   dialog.querySelector('#dialog-cancel').onclick=()=>dialog.close();
   dialog.oncancel=event=>{if(saving)event.preventDefault();};

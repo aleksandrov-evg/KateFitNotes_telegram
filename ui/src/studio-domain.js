@@ -1,6 +1,7 @@
 export const studioNav = [
   ['gelios/overview','Обзор','grid'], ['gelios/clients','Клиенты','users'],
   ['gelios/packages','Пакеты и оплата','wallet'], ['gelios/attendance','Внести тренировку','plus'],
+  ['gelios/calendar','Календарь тренировок','calendar'],
   ['gelios/bookings','Посещения','calendar'], ['gelios/transactions','Журнал списаний','chart'],
 ];
 
@@ -9,6 +10,13 @@ export const relationId = (record, relation) => record?.[relation + 'Id'] || rec
 export const currencyAmount = value => Number(value?.amountMicros || 0) / 1000000;
 export const eligibleProducts = products => products.filter(product => product.isActive && ['GROUP_PACKAGE','PERSONAL'].includes(product.category));
 export const personPackages = (packages, personId) => packages.filter(record => relationId(record,'person') === personId);
+export const calendarDate = value => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow'}).format(new Date(value));
+export const sessionParticipants = (bookings, sessionId) => bookings.filter(booking => relationId(booking,'classSession') === sessionId && ['BOOKED','CONFIRMED','ATTENDED'].includes(booking.status));
+export const sessionCanAdd = (session, bookings, now = new Date()) => ['PLANNED','CONFIRMED'].includes(session.status) && new Date(session.startsAt) > now && sessionParticipants(bookings,session.id).length < Number(session.capacity);
+export const sessionMemberships = (packages, products, personId, session) => personPackages(packages,personId).filter(membership => {
+  const product=products.find(product=>product.id===relationId(membership,'product'));
+  return membership.status==='ACTIVE' && membership.visitsAvailable>0 && ['GROUP_PACKAGE','PERSONAL'].includes(product?.category) && product.sessionFormat===session.sessionFormat && membership.activatedAt && new Date(membership.activatedAt)<=new Date(session.startsAt) && (!membership.expiresOn || membership.expiresOn>=session.startsAt.slice(0,10));
+});
 export const createOperationId = (cryptoProvider = globalThis.crypto) => {
   if (typeof cryptoProvider?.randomUUID === 'function') return cryptoProvider.randomUUID();
   if (typeof cryptoProvider?.getRandomValues !== 'function') throw new Error('Браузер не поддерживает безопасное создание ключа операции. Откройте UI через HTTPS или обновите браузер.');
@@ -37,5 +45,5 @@ export class PendingStudioOperation {
   }
   save(kind, body) { this.storage.setItem('gelios-pending-' + kind, JSON.stringify(body)); }
   clear(kind) { this.storage.removeItem('gelios-pending-' + kind); }
-  clearAll() { for (const kind of ['client','payment','attendance']) this.clear(kind); }
+  clearAll() { for (const kind of ['client','payment','attendance','booking','cancellation']) this.clear(kind); }
 }

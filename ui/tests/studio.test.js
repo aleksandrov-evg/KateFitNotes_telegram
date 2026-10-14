@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Api} from '../src/api.js';
 import {StudioUi} from '../src/studio.js';
-import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation} from '../src/studio-domain.js';
+import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships} from '../src/studio-domain.js';
 
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};};
 const json=body=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
@@ -16,6 +16,22 @@ test('ключ операции работает на HTTP без crypto.randomU
 test('генерация использует native UUID либо явно сообщает об отсутствии криптографии',()=>{
   assert.equal(createOperationId({randomUUID:()=> 'native-id'}),'native-id');
   assert.throws(()=>createOperationId({}),/HTTPS/);
+});
+test('календарь группирует по Москве и считает только активных участников',()=>{
+  assert.equal(calendarDate('2026-10-14T22:00:00Z'),'2026-10-15');
+  const session={id:'session',status:'PLANNED',startsAt:'2099-01-01T10:00:00Z',capacity:1};
+  const bookings=[{classSessionId:'session',status:'CANCELLED_BY_STUDIO'},{classSessionId:'other',status:'BOOKED'}];
+  assert.equal(sessionParticipants(bookings,'session').length,0);
+  assert.equal(sessionCanAdd(session,bookings),true);
+  assert.equal(sessionCanAdd(session,[{classSessionId:'session',status:'BOOKED'}]),false);
+  assert.equal(sessionCanAdd({...session,status:'COMPLETED'},[]),false);
+  assert.equal(sessionCanAdd({...session,startsAt:'2020-01-01T10:00:00Z'},[]),false);
+});
+test('карточка предлагает принадлежащий клиенту пакет подходящего формата и даты',()=>{
+  const session={sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T10:00:00Z'};
+  const valid={id:'valid',personId:'person',productId:'product',status:'ACTIVE',visitsAvailable:1,activatedAt:'2026-10-01T10:00:00Z',expiresOn:'2026-10-31'};
+  const packages=[valid,{...valid,id:'other',personId:'other'},{...valid,id:'expired',expiresOn:'2026-10-14'},{...valid,id:'empty',visitsAvailable:0}];
+  assert.deepEqual(sessionMemberships(packages,[{id:'product',category:'GROUP_PACKAGE',sessionFormat:'GROUP_REFORMER'}],'person',session).map(item=>item.id),['valid']);
 });
 
 test('Gelios использует собственную навигацию и UUID, не числовые id Terfit',()=>{

@@ -82,7 +82,7 @@ class StudioCrm:
         return result
 
     def list_records(self, resource: str, cursor: str | None = None) -> dict:
-        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions"}
+        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents"}
         object_name = objects[resource]
         params = {"limit": 100, "depth": 0}
         if cursor:
@@ -195,6 +195,28 @@ class AttendanceRequest(BaseModel):
         return value
 
 
+class CreateBookingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID = Field(alias="personId")
+    membership_id: UUID = Field(alias="membershipId")
+    class_session_id: UUID = Field(alias="classSessionId")
+    idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
+
+
+class CancelBookingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    booking_id: UUID = Field(alias="bookingId")
+    cancelled_at: datetime = Field(alias="cancelledAt")
+    idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
+
+    @field_validator("cancelled_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("Укажите время с часовым поясом")
+        return value
+
+
 router = APIRouter(prefix="/studio")
 
 
@@ -222,7 +244,7 @@ def record_past(body: AttendanceRequest, username: str = Depends(require_user), 
 
 
 @router.get("/records/{resource}")
-def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions", "events"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     if cursor and len(cursor) > 2000:
         raise HTTPException(422, "Некорректный курсор.")
     return studio.list_records(resource, cursor)
@@ -236,3 +258,13 @@ def create_client(body: ClientRequest, username: str = Depends(require_user), st
 @router.post("/package-payments/confirm")
 def confirm_package_payment(body: PackagePaymentRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     return studio.command("/studio/package-payments/confirm", body.model_dump(mode="json", by_alias=True, exclude_none=True))
+
+
+@router.post("/bookings/create")
+def create_booking(body: CreateBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.command("/studio/bookings/create", body.model_dump(mode="json", by_alias=True))
+
+
+@router.post("/bookings/cancel")
+def cancel_booking(body: CancelBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.command("/studio/bookings/cancel", body.model_dump(mode="json", by_alias=True))
