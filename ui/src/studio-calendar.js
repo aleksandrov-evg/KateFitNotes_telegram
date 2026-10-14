@@ -46,7 +46,7 @@ export class StudioCalendar {
     const pendingStart=pending?calendarDate(pending.startsAt)+'T'+time(pending.startsAt):null;
     const values=pending?{...pending,startsAt:pendingStart,pastConfirmed:pending.pastConfirmed?'on':''}:slot?{startsAt:slot}:this.creationDraft||{};
     studio.showDialog('Новая тренировка',`<form id="calendar-create-form">
-      ${field('session-name','Название','<input id="session-name" name="name" maxlength="200" required>')}
+      ${field('session-name','Название (из формата)','<input id="session-name" name="name" readonly>')}
       ${field('session-format','Формат',`<select id="session-format" name="sessionFormat">${sessionFormats.map(([value,text])=>`<option value="${value}">${e(text)}</option>`).join('')}</select>`)}
       ${field('session-start','Дата и начало (Москва)','<input id="session-start" name="startsAt" type="datetime-local" required>')}
       ${field('session-duration','Длительность, минут','<input id="session-duration" name="durationMinutes" type="number" min="1" max="1440" required>')}
@@ -87,6 +87,7 @@ export class StudioCalendar {
     const update=()=>{
       this.creationDraft={...Object.fromEntries(new FormData(form)),participants:selected};
       try{
+        if(!pending)form.elements.name.value=sessionFormats.find(([format])=>format===form.sessionFormat.value)?.[1]||'';
         form.capacity.readOnly=form.sessionFormat.value==='PERSONAL_EQUIPMENT';
         const status=sessionTimeState(form.startsAt.value+':00+03:00',form.durationMinutes.value);
         dialog.querySelector('#session-past-confirmation').hidden=status!=='COMPLETED';

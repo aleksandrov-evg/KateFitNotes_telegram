@@ -211,7 +211,7 @@ class SessionParticipantRequest(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    name: str = Field(min_length=1, max_length=200)
+    name: str = Field(default="", max_length=200)
     session_format: Literal["GROUP_REFORMER", "INTRO_REFORMER", "PERSONAL_EQUIPMENT", "SPLIT_EQUIPMENT", "MAT_PILATES", "STRETCHING", "TRX"] = Field(alias="sessionFormat")
     starts_at: datetime = Field(alias="startsAt")
     duration_minutes: int = Field(alias="durationMinutes", ge=1, le=1440, strict=True)

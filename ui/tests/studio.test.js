@@ -45,6 +45,7 @@ test('создание будущего и прошедшего занятия �
   const now=new Date('2026-10-14T12:00:00Z');
   const values={name:' Тренировка ',sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T10:00',durationMinutes:'55',capacity:'4'};
   const future=sessionCreationPayload(values,'stable',now);
+  assert.equal(future.name,'Группа на реформере');
   assert.equal(future.startsAt,'2026-10-15T07:00:00.000Z');assert.equal(future.status,'PLANNED');
   assert.equal(future.personId,undefined);assert.equal(future.membershipId,undefined);
   assert.throws(()=>sessionCreationPayload({...values,startsAt:'2026-10-13T10:00'},'stable',now),/Подтвердите/);

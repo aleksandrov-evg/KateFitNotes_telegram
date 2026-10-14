@@ -22,9 +22,10 @@ export const sessionTimeState = (startsAt, durationMinutes, now = new Date()) =>
 export const sessionCreationPayload = (values, key, now = new Date()) => {
   const startsAt=new Date(values.startsAt+':00+03:00').toISOString();
   const durationMinutes=Number(values.durationMinutes),capacity=Number(values.capacity),status=sessionTimeState(startsAt,durationMinutes,now);
-  if(!values.name.trim()||!sessionFormats.some(([format])=>format===values.sessionFormat)||!Number.isInteger(capacity)||capacity<1||capacity>100)throw new Error('Проверьте название, формат и вместимость.');
+  const name=sessionFormats.find(([format])=>format===values.sessionFormat)?.[1];
+  if(!name||!Number.isInteger(capacity)||capacity<1||capacity>100)throw new Error('Проверьте формат и вместимость.');
   if(status==='COMPLETED'&&values.pastConfirmed!=='on')throw new Error('Подтвердите, что прошедшая тренировка состоялась.');
-  return {name:values.name.trim(),sessionFormat:values.sessionFormat,startsAt,durationMinutes,capacity,status,pastConfirmed:status==='COMPLETED',idempotencyKey:key};
+  return {name,sessionFormat:values.sessionFormat,startsAt,durationMinutes,capacity,status,pastConfirmed:status==='COMPLETED',idempotencyKey:key};
 };
 export const calendarSessionLayout = (sessions, day) => {
   const start=new Date(day+'T07:00:00+03:00').getTime(),end=new Date(day+'T23:00:00+03:00').getTime();
