@@ -41,7 +41,8 @@ try{
       await page.getByRole('heading',{name:title,exact:true}).waitFor();
       await page.evaluate(()=>document.fonts.ready);
       await noPageOverflow();
-      assert.equal(await page.locator('.sidebar').evaluate(element=>getComputedStyle(element).backgroundColor),'rgb(24, 43, 39)');
+      assert.equal(await page.locator('.sidebar').evaluate(element=>getComputedStyle(element).backgroundColor),'rgb(59, 36, 43)');
+      assert.equal(await page.evaluate(()=>getComputedStyle(document.body).getPropertyValue('--accent').trim()),'#b85160');
       if(width===1440)assert.equal((await page.locator('.sidebar').boundingBox()).width,232);
       if(route==='calendar')assert.equal(await page.locator('.calendar-free-slot').first().evaluate(element=>getComputedStyle(element).borderRadius),'0px');
       if(route==='packages'){
