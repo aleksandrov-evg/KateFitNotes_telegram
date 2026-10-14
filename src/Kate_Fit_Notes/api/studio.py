@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import re
+import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
-from uuid import UUID
+from uuid import UUID, NAMESPACE_URL, uuid5
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -81,6 +83,46 @@ class StudioCrm:
             raise HTTPException(409, {"code": result.get("code", "CRM_ERROR"), "message": result.get("message", "Операция CRM не выполнена.")})
         return result
 
+    def record_event(self, event: dict) -> None:
+        try:
+            existing = self.request("GET", f"/rest/studioEvents/{event['id']}").get("data", {}).get("studioEvent")
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            existing = None
+        if existing:
+            if any(existing.get(key) != event.get(key) for key in ("eventType", "outcome", "idempotencyKey")):
+                raise HTTPException(409, "Событие операции требует проверки журнала CRM.")
+            if event["outcome"] == "SUCCESS" and existing.get("details") != event.get("details"):
+                raise HTTPException(409, "Событие клиента содержит другие данные.")
+            return
+        result = self.request("POST", "/rest/studioEvents", body={**event, "occurredAt": datetime.now(timezone.utc).isoformat()})
+        created = result.get("data", {}).get("createStudioEvent")
+        if not isinstance(created, dict) or created.get("id") != event["id"]:
+            raise HTTPException(502, "Запись журнала не подтверждена. Повторите с прежним ключом операции.")
+
+    def perform_operation(self, operation: str, body: dict, username: str, action: Callable[[], dict]) -> dict:
+        try:
+            return action()
+        except HTTPException as exc:
+            key = str(body.get("idempotencyKey") or body.get("clientId"))
+            details = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+            # Unknown responses may follow committed writes; never describe them as a rollback.
+            event = {"id": str(uuid5(NAMESPACE_URL, f"studio-ui-failure:{operation}:{key}")),
+                     "name": "Запрос UI не подтверждён" if exc.status_code >= 500 else "Операция UI отклонена",
+                     "eventType": "OPERATION_FAILED", "outcome": "FAILURE", "idempotencyKey": key,
+                     "bookingId": body.get("bookingId"), "classSessionId": body.get("classSessionId") or body.get("existingClassSessionId"),
+                     "membershipId": body.get("membershipId"),
+                     "details": json.dumps({"operation": operation, "operator": username, "source": "KATEFIT_UI",
+                                            "execution": "UNKNOWN" if exc.status_code >= 500 else "REJECTED",
+                                            "status": exc.status_code, "code": details.get("code", "CRM_ERROR"),
+                                            "message": details.get("message", "Операция не подтверждена")}, ensure_ascii=False, sort_keys=True)}
+            try:
+                self.record_event(event)
+            except HTTPException as audit_error:
+                raise HTTPException(502, {"code": "AUDIT_UNCONFIRMED", "message": f"{details.get('message', 'Операция не подтверждена')}. Запись журнала также не подтверждена. Проверьте CRM и повторяйте только с прежним ключом."}) from audit_error
+            raise
+
     def list_records(self, resource: str, cursor: str | None = None) -> dict:
         objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents"}
         object_name = objects[resource]
@@ -97,8 +139,11 @@ class StudioCrm:
             raise HTTPException(502, "CRM вернула некорректную страницу списка.")
         return {"items": items, "next_cursor": next_cursor}
 
-    def create_person(self, person: ClientRequest) -> dict:
+    def create_person(self, person: ClientRequest, username: str) -> dict:
         data = person.crm_data()
+        event = {"id": str(person.client_id), "name": "Клиент добавлен из UI", "eventType": "CLIENT_CREATED",
+                 "outcome": "SUCCESS", "idempotencyKey": str(person.client_id),
+                 "details": json.dumps({"personId": str(person.client_id), "source": "KATEFIT_UI", "operator": username}, ensure_ascii=False, sort_keys=True)}
         # A browser-generated UUID keeps a retry after a lost response from creating another person.
         try:
             existing = self.request("GET", f"/rest/people/{person.client_id}").get("data", {}).get("person")
@@ -110,6 +155,7 @@ class StudioCrm:
             existing_name = existing.get("name") or {}
             if existing_name.get("firstName") != person.first_name or (existing_name.get("lastName") or "") != person.last_name or (existing.get("phones") or {}).get("primaryPhoneNumber") != person.phone or ((existing.get("emails") or {}).get("primaryEmail") or "") != person.email:
                 raise HTTPException(409, "Ключ клиента уже использован с другими данными.")
+            self.record_event(event)
             return {"id": str(person.client_id), "duplicate": True}
         matches = self.request("GET", "/rest/people", params={"limit": 1, "filter": f"phones.primaryPhoneNumber[eq]:{person.phone}"}).get("data", {}).get("people")
         if not isinstance(matches, list):
@@ -120,6 +166,7 @@ class StudioCrm:
         created = result.get("data", {}).get("createPerson")
         if not isinstance(created, dict) or created.get("id") != str(person.client_id):
             raise HTTPException(502, "Результат неизвестен. Повторите с прежним ключом клиента.")
+        self.record_event(event)
         return {"id": created["id"], "duplicate": False}
 
 
@@ -267,7 +314,8 @@ def preview(body: AttendanceRequest, username: str = Depends(require_user), stud
 
 @router.post("/attendance/record-past")
 def record_past(body: AttendanceRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
-    return studio.attendance(body.model_dump(mode="json", by_alias=True, exclude_none=True), preview=False)
+    data = body.model_dump(mode="json", by_alias=True, exclude_none=True)
+    return studio.perform_operation("attendance/record-past", data, username, lambda: studio.attendance(data, preview=False))
 
 
 @router.get("/records/{resource}")
@@ -279,24 +327,29 @@ def records(resource: Literal["clients", "products", "packages", "bookings", "se
 
 @router.post("/clients")
 def create_client(body: ClientRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
-    return studio.create_person(body)
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("clients/create", data, username, lambda: studio.create_person(body, username))
 
 
 @router.post("/package-payments/confirm")
 def confirm_package_payment(body: PackagePaymentRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
-    return studio.command("/studio/package-payments/confirm", body.model_dump(mode="json", by_alias=True, exclude_none=True))
+    data = body.model_dump(mode="json", by_alias=True, exclude_none=True)
+    return studio.perform_operation("package-payments/confirm", data, username, lambda: studio.command("/studio/package-payments/confirm", data))
 
 
 @router.post("/bookings/create")
 def create_booking(body: CreateBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
-    return studio.command("/studio/bookings/create", body.model_dump(mode="json", by_alias=True))
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("bookings/create", data, username, lambda: studio.command("/studio/bookings/create", data))
 
 
 @router.post("/sessions/create")
 def create_session(body: CreateSessionRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
-    return studio.command("/studio/sessions/create", body.model_dump(mode="json", by_alias=True))
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("sessions/create", data, username, lambda: studio.command("/studio/sessions/create", data))
 
 
 @router.post("/bookings/cancel")
 def cancel_booking(body: CancelBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
-    return studio.command("/studio/bookings/cancel", body.model_dump(mode="json", by_alias=True))
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("bookings/cancel", data, username, lambda: studio.command("/studio/bookings/cancel", data))

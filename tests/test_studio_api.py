@@ -10,6 +10,7 @@ from src.Kate_Fit_Notes.api.app import create_app
 from src.Kate_Fit_Notes.api.studio import StudioCrm, StudioSettings, load_studio_settings
 from src.Kate_Fit_Notes.settings import ConfigError
 from tests.test_api import API_SETTINGS, FakeApiRepo
+from tests.studio_event_fake import FakeStudioEvents
 
 CRM_BASE = "http://crm-stage.lan"
 SETTINGS = StudioSettings(CRM_BASE, "server-api-key")
@@ -28,9 +29,13 @@ class FakeCrm:
         self.command_timeout = False
         self.status_code = 200
         self.body = None
+        self.audit = FakeStudioEvents()
 
     def request(self, request: httpx.Request):
         self.requests.append(request)
+        audit_response = self.audit.handle(request)
+        if audit_response is not None:
+            return audit_response
         assert request.url.path == "/s/studio/attendance/record-past"
         assert request.headers["authorization"] == "Bearer server-api-key"
         if self.command_timeout:
@@ -80,10 +85,10 @@ def test_timeout_does_not_retry_and_preserves_operation_key(connected_app):
     response = browser.post("/api/v1/studio/attendance/record-past", json=ATTENDANCE, headers=headers)
     assert response.status_code == 502
     assert "Результат неизвестен" in response.json()["detail"]
-    assert len(remote.requests) == 1
+    assert len([request for request in remote.requests if request.url.path.startswith('/s/')]) == 1
     remote.command_timeout = False
     assert browser.post("/api/v1/studio/attendance/record-past", json=ATTENDANCE, headers=headers).status_code == 200
-    assert all(json.loads(request.content)["idempotencyKey"] == "attendance-1" for request in remote.requests)
+    assert all(json.loads(request.content)["idempotencyKey"] == "attendance-1" for request in remote.requests if request.url.path.startswith('/s/'))
 
 
 @pytest.mark.parametrize("status_code", [401, 403])

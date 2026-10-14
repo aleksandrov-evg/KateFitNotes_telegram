@@ -10,6 +10,7 @@ from src.Kate_Fit_Notes.api.app import create_app
 from src.Kate_Fit_Notes.api.studio import StudioCrm
 from tests.test_api import API_SETTINGS, FakeApiRepo
 from tests.test_studio_api import SETTINGS, ATTENDANCE
+from tests.studio_event_fake import FakeStudioEvents
 
 CLIENT = {"clientId": ATTENDANCE["personId"], "firstName": "Катя", "lastName": "Иванова", "phone": "+7 (921) 000-00-00", "email": "kate@example.com"}
 PAYMENT = {"personId": ATTENDANCE["personId"], "productId": ATTENDANCE["membershipId"], "paidAt": "2026-01-01T09:00:00Z", "amount": 10000, "paymentMethod": "SBP", "idempotencyKey": "payment-1"}
@@ -21,11 +22,15 @@ class FakeRecordsCrm:
         self.people = {}
         self.invalid_cursor = False
         self.timeout = False
+        self.audit = FakeStudioEvents()
 
     def request(self, request):
         self.requests.append(request)
         assert request.headers["authorization"] == "Bearer server-api-key"
         path = request.url.path
+        audit_response = self.audit.handle(request)
+        if audit_response is not None:
+            return audit_response
         if request.method == "GET" and path == "/rest/people":
             if request.url.params.get("filter"):
                 phone = request.url.params["filter"].split(":")[-1]
@@ -76,7 +81,7 @@ def test_client_creation_normalizes_contact_and_recovers_lost_response(records_a
     remote.timeout = False
     repeated = browser.post("/api/v1/studio/clients", json=CLIENT, headers=headers)
     assert repeated.json() == {"id": CLIENT["clientId"], "duplicate": True}
-    creates = [request for request in remote.requests if request.method == "POST"]
+    creates = [request for request in remote.requests if request.method == "POST" and request.url.path == "/rest/people"]
     assert len(creates) == 1
     person = remote.people[CLIENT["clientId"]]
     assert person["name"] == {"firstName": "Катя", "lastName": "Иванова"}
