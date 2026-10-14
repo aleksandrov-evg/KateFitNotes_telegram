@@ -26,6 +26,9 @@ services:
       API_USER: ${API_USER:?API_USER is required}
       API_PASSWORD: ${API_PASSWORD:?API_PASSWORD is required}
       API_JWT_SECRET: ${API_JWT_SECRET:?API_JWT_SECRET is required}
+      CRM_ENABLED: ${CRM_ENABLED:-0}
+      CRM_BASE_URL: ${CRM_BASE_URL:-}
+      CRM_API_KEY: ${CRM_API_KEY:-}
     expose:
       - "8000"
     ports:
