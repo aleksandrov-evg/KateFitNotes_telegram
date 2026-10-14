@@ -1,3 +1,4 @@
+import {chooseOption} from './select_option.mjs';
 import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -49,7 +50,7 @@ await page.addInitScript(()=>sessionStorage.setItem('katefit-token','test-sessio
 try {
   await page.goto((process.env.UI_SMOKE_URL || 'http://127.0.0.1:5184/') + '#overview');
   await page.getByRole('heading',{name:'Обзор',exact:true}).waitFor();
-  await page.getByLabel('Рабочее пространство').selectOption('gelios');
+  await chooseOption(page.getByLabel('Рабочее пространство'),'gelios');
   await page.getByRole('heading',{name:'Обзор Gelios',exact:true}).waitFor();
   await page.screenshot({path:join(artifactDirectory,'gelios-ui-overview.png'),fullPage:true});
   await page.getByRole('link',{name:'Клиенты',exact:true}).click();
@@ -62,16 +63,16 @@ try {
   await page.getByRole('button',{name:'Мария Новая'}).waitFor();
   await page.getByRole('link',{name:'Пакеты и оплата',exact:true}).click();
   const payment=page.locator('#studio-payment-form');
-  await payment.getByLabel('Клиент').selectOption(personId);
-  await payment.getByLabel('Продукт').selectOption(productId);
+  await chooseOption(payment.getByLabel('Клиент'),personId);
+  await chooseOption(payment.getByLabel('Продукт'),productId);
   await payment.getByLabel('Когда оплачено').fill('2026-01-01T09:00');
   await payment.getByRole('button',{name:'Подтвердить оплату и создать пакет'}).click();
   await page.locator('#confirm').getByRole('button',{name:'Добавить',exact:true}).click();
   await page.locator('#confirm').waitFor({state:'hidden'});
   await page.getByRole('link',{name:'Внести тренировку',exact:true}).click();
   const attendance=page.locator('#studio-attendance-form');
-  await attendance.getByLabel('Клиент').selectOption(personId);
-  await attendance.getByLabel('Пакет').selectOption(membershipId);
+  await chooseOption(attendance.getByLabel('Клиент'),personId);
+  await chooseOption(attendance.getByLabel('Пакет'),membershipId);
   await attendance.getByLabel('Начало занятия').fill('2026-01-01T10:00');
   await attendance.getByLabel('Причина внесения').fill('По журналу');
   await attendance.getByRole('button',{name:'Проверить списание'}).click();
@@ -90,10 +91,10 @@ try {
   await page.screenshot({path:join(artifactDirectory,'gelios-ui-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   await page.getByRole('button',{name:'Открыть меню'}).click();
-  await page.getByLabel('Рабочее пространство').selectOption('terfit');
+  await chooseOption(page.getByLabel('Рабочее пространство'),'terfit');
   await page.getByRole('heading',{name:'Обзор',exact:true}).waitFor();
   await page.getByRole('button',{name:'Открыть меню'}).click();
-  await page.getByLabel('Рабочее пространство').selectOption('gelios');
+  await chooseOption(page.getByLabel('Рабочее пространство'),'gelios');
   configured=false;
   await page.getByRole('button',{name:'Обновить данные'}).click();
   await page.getByText('CRM пока не подключена.',{exact:false}).waitFor();

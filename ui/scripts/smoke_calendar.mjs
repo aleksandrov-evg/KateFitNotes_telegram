@@ -1,3 +1,4 @@
+import {chooseOption} from './select_option.mjs';
 import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -58,8 +59,8 @@ try{
   await page.screenshot({path:join(tmpdir(),'gelios-calendar-desktop.png'),fullPage:true});
   await page.getByRole('button',{name:/Реформер · календарь/}).click();
   const modal=page.locator('#confirm');
-  await modal.getByLabel('Клиент',{exact:true}).selectOption(personId);
-  await modal.getByLabel('Пакет',{exact:true}).selectOption(membershipId);
+  await chooseOption(modal.getByLabel('Клиент',{exact:true}),personId);
+  await chooseOption(modal.getByLabel('Пакет',{exact:true}),membershipId);
   await modal.getByRole('button',{name:'Добавить клиента в тренировку',exact:true}).click();
   await modal.getByRole('heading',{name:'Незавершённая операция'}).waitFor();
   await page.reload();

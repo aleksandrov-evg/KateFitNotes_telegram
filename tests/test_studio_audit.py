@@ -84,3 +84,19 @@ def test_conflicting_client_event_never_returns_success(records_app):
     remote.audit.events[CLIENT["clientId"]]["details"] = "{}"
     assert browser.post("/api/v1/studio/clients", json=CLIENT, headers=headers).status_code == 409
     assert len(remote.people) == 1
+
+
+def test_unexpected_api_error_is_audited_without_exposing_exception(monkeypatch, records_app):
+    browser, remote, headers = records_app
+
+    def failed(*_arguments, **_keywords):
+        raise RuntimeError("internal-sensitive-value")
+
+    monkeypatch.setattr(StudioCrm, "command", failed)
+    response = browser.post("/api/v1/studio/package-payments/confirm", json=PAYMENT, headers=headers)
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "API_OPERATION_UNCONFIRMED"
+    event = next(iter(remote.audit.events.values()))
+    assert json.loads(event["details"])["execution"] == "UNKNOWN"
+    assert "internal-sensitive-value" not in response.text
+    assert "internal-sensitive-value" not in event["details"]

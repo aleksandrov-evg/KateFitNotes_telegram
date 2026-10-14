@@ -1,4 +1,5 @@
 import {Api} from './api.js';
+import './studio-select.js';
 import {StudioUi} from './studio.js';
 import {studioNav} from './studio-domain.js';
 import {escapeHtml as e, today, addDays, weekStart, weekDays, formatDate, money, clientName, phoneLabel, normalizePhone, integer, activePackages, priceHint, slots, bookingPayload} from './domain.js';

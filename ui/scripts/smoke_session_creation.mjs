@@ -1,3 +1,4 @@
+import {chooseOption} from './select_option.mjs';
 import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -53,8 +54,10 @@ try{
   assert.equal(await form.getByLabel('Название (из формата)').inputValue(),'Группа на реформере');
   assert.ok(await form.getByLabel('Название (из формата)').getAttribute('readonly')!==null);
   await form.getByLabel('Длительность, минут').fill('60');
-  assert.equal(await form.getByLabel('Доступный клиент').locator('option').count(),2);
-  await form.getByLabel('Доступный клиент').selectOption(groupPerson);
+  assert.equal(await form.locator('#session-person option').count(),2);
+  await form.getByRole('combobox',{name:'Доступный клиент',exact:true}).fill('Групп');
+  assert.equal(await modal.getByRole('option').count(),1);
+  await chooseOption(form.getByLabel('Доступный клиент'),groupPerson);
   await form.getByRole('button',{name:'Добавить в список',exact:true}).click();
   await form.getByRole('button',{name:'Запланировать тренировку',exact:true}).click();
   await modal.getByRole('heading',{name:'Незавершённое создание'}).waitFor();
@@ -90,12 +93,12 @@ try{
   await modal.getByRole('button',{name:'Закрыть',exact:true}).click();
   await page.getByRole('button',{name:'+ Новая тренировка',exact:true}).click();
   await form.getByLabel('Дата и начало (Москва)').fill(futureDay+'T11:00');
-  await form.getByLabel('Формат',{exact:true}).selectOption('PERSONAL_EQUIPMENT');
+  await chooseOption(form.getByLabel('Формат',{exact:true}),'PERSONAL_EQUIPMENT');
   assert.equal(await form.getByLabel('Название (из формата)').inputValue(),'Персональное на оборудовании');
   assert.equal(await form.getByLabel('Количество мест').inputValue(),'1');
   assert.equal(await form.getByLabel('Количество мест').getAttribute('readonly'),'');
-  assert.equal(await form.getByLabel('Доступный клиент').locator('option').count(),2);
-  await form.getByLabel('Доступный клиент').selectOption(personalPerson);
+  assert.equal(await form.locator('#session-person option').count(),2);
+  await chooseOption(form.getByLabel('Доступный клиент'),personalPerson);
   await form.getByRole('button',{name:'Добавить в список',exact:true}).click();
   assert.ok(await form.getByRole('button',{name:'Добавить в список',exact:true}).isDisabled());
   await page.screenshot({path:join(tmpdir(),'gelios-personal-participant-picker.png'),fullPage:true});

@@ -1,3 +1,4 @@
+import {chooseOption} from './select_option.mjs';
 import assert from 'node:assert/strict';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -11,7 +12,7 @@ const errors=[];page.on('pageerror',error=>errors.push(error.message));
 const origin=process.env.UI_SMOKE_URL||'http://127.0.0.1:5184/';
 const artifacts=process.env.UI_SMOKE_ARTIFACT_DIR||tmpdir();
 const data={
-  clients:[{id:'client-1',name:{firstName:'Мария',lastName:'Александрова'},phones:{primaryPhoneCallingCode:'+7',primaryPhoneNumber:'9211234567'},emails:{primaryEmail:'maria@example.com'}}],
+  clients:[{id:'client-1',name:{firstName:'Мария',lastName:'Александрова'},phones:{primaryPhoneCallingCode:'+7',primaryPhoneNumber:'9211234567'},emails:{primaryEmail:'maria@example.com'}},{id:'client-2',name:{firstName:'Анна',lastName:'Иванова'},phones:{primaryPhoneNumber:'9997654321'},emails:{primaryEmail:'anna@example.com'}}],
   products:[{id:'product-1',name:'Группа на реформере · 8 занятий',category:'GROUP_PACKAGE',sessionFormat:'GROUP_REFORMER',isActive:true,visitsIncluded:8,validityDays:30,durationMinutes:55,price:{amountMicros:8800000000,currencyCode:'RUB'}}],
   packages:[{id:'package-1',personId:'client-1',productId:'product-1',name:'Группа на реформере · 8 занятий',status:'ACTIVE',visitsAvailable:2,visitsGranted:8,visitsConsumed:5,visitsReserved:1,expiresOn:'2027-12-31'}],
   sessions:[{id:'session-1',name:'Группа на реформере',sessionFormat:'GROUP_REFORMER',startsAt:today()+'T09:00:00+03:00',endsAt:today()+'T09:55:00+03:00',status:'COMPLETED',capacity:4}],
@@ -45,9 +46,28 @@ try{
       if(route==='calendar')assert.equal(await page.locator('.calendar-free-slot').first().evaluate(element=>getComputedStyle(element).borderRadius),'0px');
       if(route==='packages'){
         const form=page.locator('#studio-payment-form');
-        await form.getByLabel('Клиент',{exact:true}).selectOption('client-1');
-        await form.getByLabel('Продукт',{exact:true}).selectOption('product-1');
-        await form.getByLabel('Способ оплаты').selectOption('SBP');
+        const picker=form.getByRole('combobox',{name:'Клиент',exact:true});
+        await picker.fill('м');
+        assert.equal(await page.locator('#'+await picker.getAttribute('aria-controls')).getByRole('option').count(),1);
+        await picker.fill('АЛЕКС');
+        const menu=page.locator('#'+await picker.getAttribute('aria-controls'));
+        assert.equal(await menu.getByRole('option').count(),1);
+        await page.screenshot({path:join(artifacts,`gelios-client-search-${width}.png`)});
+        await picker.fill('921123');
+        assert.equal(await menu.getByRole('option').count(),1);
+        await picker.fill('maria@');
+        assert.equal(await menu.getByRole('option').count(),1);
+        await picker.press('ArrowDown');await picker.press('Enter');
+        assert.equal(await form.locator('select[name=personId]').inputValue(),'client-1');
+        await picker.fill('несуществующий');
+        await menu.getByText('Ничего не найдено',{exact:true}).waitFor();
+        assert.equal(await form.locator('select[name=personId]').inputValue(),'');
+        assert.equal(await picker.evaluate(element=>element.checkValidity()),false);
+        await picker.press('Escape');
+        assert.equal(await picker.getAttribute('aria-expanded'),'false');
+        await chooseOption(form.getByLabel('Клиент',{exact:true}),'client-1');
+        await chooseOption(form.getByLabel('Продукт',{exact:true}),'product-1');
+        await chooseOption(form.getByLabel('Способ оплаты'),'SBP');
         await page.locator('.studio-payment-summary').getByText('Мария Александрова',{exact:true}).waitFor();
         assert.equal(await page.locator('.studio-summary-method').textContent(),'СБП');
         const layout=await page.locator('.studio-payment-layout').boundingBox();

@@ -1,3 +1,4 @@
+import {chooseOption} from './select_option.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -25,8 +26,8 @@ await page.addInitScript(()=>sessionStorage.setItem('katefit-token','test'));
 try{
   await page.goto('http://gelios-ui.test/#gelios/packages');
   const form=page.locator('#studio-payment-form');
-  await form.getByLabel('Клиент',{exact:true}).selectOption(id);
-  await form.getByLabel('Продукт',{exact:true}).selectOption(id);
+  await chooseOption(form.getByLabel('Клиент',{exact:true}),id);
+  await chooseOption(form.getByLabel('Продукт',{exact:true}),id);
   await form.getByLabel('Когда оплачено').fill('2026-01-01T09:00');
   console.log(await page.evaluate(()=>({secureContext:isSecureContext,randomUUID:typeof crypto.randomUUID,getRandomValues:typeof crypto.getRandomValues})));
   await form.getByRole('button',{name:'Подтвердить оплату и создать пакет'}).click();

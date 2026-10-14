@@ -1,5 +1,6 @@
 import {escapeHtml as e, money} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
+import {setStudioSelectClients} from './studio-select.js';
 import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate} from './studio-domain.js';
 
 let fieldSequence = 0;
@@ -21,7 +22,7 @@ export class StudioUi {
     this.calendar = new StudioCalendar(this);
     this.data = null; this.generation = 0; this.saving = false;
   }
-  reset() { this.generation++; this.data=null; }
+  reset() { this.generation++; this.data=null; setStudioSelectClients([]); }
   deactivate() { this.generation++; }
   clientName(id) { return studioPersonName(this.data.clients.find(person=>person.id===id)); }
   product(id) { return this.data.products.find(product=>product.id===id); }
@@ -40,6 +41,7 @@ export class StudioUi {
         this.data = Object.fromEntries(resources.map((resource,index)=>[resource,lists[index]]));
       }
       if (run !== this.generation) return;
+      setStudioSelectClients(this.data.clients);
       ({overview:()=>this.overview(),clients:()=>this.clients(),packages:()=>this.packages(),attendance:()=>this.attendance(),bookings:()=>this.bookings(),transactions:()=>this.transactions(),calendar:()=>this.calendar.render()})[route]();
       document.querySelector('.refresh').onclick=()=>this.render(this.route,true);
     } catch(error) {

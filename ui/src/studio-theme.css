@@ -115,6 +115,20 @@
 .studio-mode .calendar-dialog .calendar-participant { font-size: 13px; }
 .studio-mode .calendar-dialog input[type=checkbox] { accent-color: #24634f; }
 .studio-mode .error { color: #a0353a; background: #fff0f0; border-radius: 10px; }
+.studio-select { position: relative; width: 100%; min-width: 0; }
+.studio-select > select[hidden] { display: none; }
+.studio-select > [role=combobox] { display: flex; width: 100%; min-height: 46px; margin: 0 !important; justify-content: space-between; text-align: left; font-size: 13px; font-weight: 400; border: 1px solid #dce5df; border-radius: 8px; background: #fff; padding: 11px 12px; color: #20372e; }
+.studio-select > button::after { content: '⌄'; color: #61726a; margin-left: 12px; }
+.studio-select-menu { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; width: 100%; max-height: 260px; overflow: auto; overscroll-behavior: contain; background: #fff; border: 1px solid #d7e1db; border-radius: 10px; box-shadow: 0 12px 32px #182b2720; padding: 4px; }
+.studio-select-menu[hidden] { display: none; }
+.studio-select-menu [role=option] { width: 100%; display: block; text-align: left; border: 0; border-radius: 6px; min-height: 44px; padding: 10px 12px; font-size: 13px; font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+.studio-select-menu [role=option]:hover, .studio-select-menu .is-highlighted { background: #e9f0ec; }
+.studio-select-menu [aria-selected=true] { background: #edf5f0; color: #24634f; font-weight: 600; }
+.studio-select-menu small { font-size: 11px; margin-top: 3px; color: #61726a; }
+.studio-select-menu p { padding: 16px 12px; color: #61726a; font-size: 13px; }
+.studio-shell .section-header .studio-select { width: 180px; }
+.studio-shell .workspace-switch .studio-select > button { background: #243d34; color: #fff; border-color: #41584e; font-size: 12px; }
+.studio-shell .workspace-switch .studio-select-menu { color: #20372e; }
 @media (min-width: 1600px) { .studio-shell #main { margin: 0 auto; } }
 @media (max-width: 1200px) {
   .studio-shell #main { padding: 32px; }

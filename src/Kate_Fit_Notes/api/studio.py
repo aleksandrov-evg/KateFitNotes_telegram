@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 import re
-import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
-from uuid import UUID, NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -104,24 +104,27 @@ class StudioCrm:
     def perform_operation(self, operation: str, body: dict, username: str, action: Callable[[], dict]) -> dict:
         try:
             return action()
-        except HTTPException as exc:
+        except Exception as exc:
+            failure = exc if isinstance(exc, HTTPException) else HTTPException(502, {"code": "API_OPERATION_UNCONFIRMED", "message": "Результат операции API не подтверждён. Проверьте CRM и повторите с прежним ключом."})
             key = str(body.get("idempotencyKey") or body.get("clientId"))
-            details = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+            details = failure.detail if isinstance(failure.detail, dict) else {"message": str(failure.detail)}
             # Unknown responses may follow committed writes; never describe them as a rollback.
             event = {"id": str(uuid5(NAMESPACE_URL, f"studio-ui-failure:{operation}:{key}")),
-                     "name": "Запрос UI не подтверждён" if exc.status_code >= 500 else "Операция UI отклонена",
+                     "name": "Запрос UI не подтверждён" if failure.status_code >= 500 else "Операция UI отклонена",
                      "eventType": "OPERATION_FAILED", "outcome": "FAILURE", "idempotencyKey": key,
                      "bookingId": body.get("bookingId"), "classSessionId": body.get("classSessionId") or body.get("existingClassSessionId"),
                      "membershipId": body.get("membershipId"),
                      "details": json.dumps({"operation": operation, "operator": username, "source": "KATEFIT_UI",
-                                            "execution": "UNKNOWN" if exc.status_code >= 500 else "REJECTED",
-                                            "status": exc.status_code, "code": details.get("code", "CRM_ERROR"),
+                                            "execution": "UNKNOWN" if failure.status_code >= 500 else "REJECTED",
+                                            "status": failure.status_code, "code": details.get("code", "CRM_ERROR"),
                                             "message": details.get("message", "Операция не подтверждена")}, ensure_ascii=False, sort_keys=True)}
             try:
                 self.record_event(event)
-            except HTTPException as audit_error:
+            except Exception as audit_error:
                 raise HTTPException(502, {"code": "AUDIT_UNCONFIRMED", "message": f"{details.get('message', 'Операция не подтверждена')}. Запись журнала также не подтверждена. Проверьте CRM и повторяйте только с прежним ключом."}) from audit_error
-            raise
+            if failure is exc:
+                raise
+            raise failure from exc
 
     def list_records(self, resource: str, cursor: str | None = None) -> dict:
         objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents"}
