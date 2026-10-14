@@ -104,6 +104,10 @@ PLAYWRIGHT_MODULE может указывать абсолютный путь к
 
 Команда sessions/create требует name, sessionFormat, startsAt, durationMinutes, capacity, status, pastConfirmed и idempotencyKey. Сначала выпустить новую studio-create-class-session в CRM, затем обновить API/UI. Повтор после потерянного ответа использует сохранённое тело/ключ; новая версия не требует новых секретов.
 
+В форме также выбираются участники с подходящими пакетами. sessions/create принимает participants:[{personId,membershipId}] и attendanceReason для прошедшего занятия с людьми. Будущее резервирует посещения; прошедшее после серверного preview списывает фактические посещения. PERSONAL_EQUIPMENT — один клиент с PERSONAL пакетом; остальные обычные групповые форматы — GROUP_PACKAGE. Без участников создание ничего не списывает.
+
+При выпуске применить новое nullable поле classSessions.creationRequest и изменённую функцию вместе. Поле хранит исходный список, обеспечивая повтор после частичного сбоя без подмены участников. Ошибка может означать уже созданный слот/часть людей: проверять карточку и повторять прежний запрос, не создавать новое занятие новым ключом.
+
 Браузерная проверка сетки/создания: npm --prefix ui run test:browser:sessions, параметры Playwright/локального UI как выше.
 
 После проверки CRM приложения на staging пересобрать отдельно KateFitNotes API (docker-compose.api.yml) и UI (docker-compose.ui.yml), сохранив действующие секреты/SQL-настройки. В Dokploy это Deploy соответствующих сервисов после сохранения Environment. Одного twenty apply недостаточно: он не обновляет контейнеры KateFitNotes.

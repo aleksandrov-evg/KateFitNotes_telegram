@@ -40,7 +40,8 @@ export const calendarSessionLayout = (sessions, day) => {
 };
 export const sessionMemberships = (packages, products, personId, session) => personPackages(packages,personId).filter(membership => {
   const product=products.find(product=>product.id===relationId(membership,'product'));
-  return membership.status==='ACTIVE' && membership.visitsAvailable>0 && ['GROUP_PACKAGE','PERSONAL'].includes(product?.category) && product.sessionFormat===session.sessionFormat && membership.activatedAt && new Date(membership.activatedAt)<=new Date(session.startsAt) && (!membership.expiresOn || membership.expiresOn>=session.startsAt.slice(0,10));
+  const category=session.sessionFormat==='PERSONAL_EQUIPMENT'?'PERSONAL':'GROUP_PACKAGE';
+  return session.sessionFormat!=='SPLIT_EQUIPMENT' && membership.status==='ACTIVE' && membership.visitsAvailable>0 && product?.category===category && product.sessionFormat===session.sessionFormat && membership.activatedAt && new Date(membership.activatedAt)<=new Date(session.startsAt) && (!membership.expiresOn || membership.expiresOn>=session.startsAt.slice(0,10)) && (session.status!=='COMPLETED' || product.durationMinutes===session.durationMinutes);
 });
 export const createOperationId = (cryptoProvider = globalThis.crypto) => {
   if (typeof cryptoProvider?.randomUUID === 'function') return cryptoProvider.randomUUID();

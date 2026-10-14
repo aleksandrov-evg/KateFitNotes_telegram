@@ -51,8 +51,13 @@ export class StudioCalendar {
       ${field('session-start','Дата и начало (Москва)','<input id="session-start" name="startsAt" type="datetime-local" required>')}
       ${field('session-duration','Длительность, минут','<input id="session-duration" name="durationMinutes" type="number" min="1" max="1440" required>')}
       ${field('session-capacity','Количество мест','<input id="session-capacity" name="capacity" type="number" min="1" max="100" required>')}
+      <section class="session-participant-picker"><h3>Участники</h3><p id="session-participant-help" class="muted"></p>
+      ${field('session-person','Доступный клиент','<select id="session-person"><option value="">Выберите клиента</option></select>')}
+      ${field('session-membership','Пакет клиента','<select id="session-membership"><option value="">Сначала выберите клиента</option></select>')}
+      <button id="session-participant-add" type="button" class="secondary">Добавить в список</button><div id="session-selected-people"></div></section>
       <p id="session-time-note" class="note"></p><label id="session-past-confirmation" class="session-confirmation"><input name="pastConfirmed" type="checkbox"> Подтверждаю, что тренировка состоялась</label>
-      <p class="muted">Сохраняется занятие и событие в CRM. Участники и списания оформляются отдельно.</p><div id="session-create-error" class="error" role="alert" hidden></div><button id="session-create-submit" type="submit" class="primary">Сохранить тренировку</button></form><div id="session-create-pending"></div>`);
+      ${field('session-attendance-reason','Основание внесения посещений (для прошедшей тренировки)','<input id="session-attendance-reason" name="attendanceReason" maxlength="2000">')}
+      <p class="muted">Будущее: резерв по одному посещению участника. Прошедшее: после проверки CRM списание по одному фактическому посещению. Пустое занятие ничего не списывает.</p><div id="session-create-error" class="error" role="alert" hidden></div><button id="session-create-submit" type="submit" class="primary">Сохранить тренировку</button></form><div id="session-create-pending"></div>`);
     const dialog=document.querySelector('#confirm');dialog.classList.add('calendar-dialog');
     const form=dialog.querySelector('#calendar-create-form');
     form.elements.name.value=values.name||'';
@@ -60,20 +65,51 @@ export class StudioCalendar {
     form.startsAt.value=values.startsAt||today()+'T09:00';
     form.durationMinutes.value=values.durationMinutes||55;form.capacity.value=values.capacity||4;
     form.pastConfirmed.checked=values.pastConfirmed==='on';
+    form.attendanceReason.value=values.attendanceReason||'';
+    let selected=(values.participants||[]).map(participant=>({...participant}));
+    const personSelect=dialog.querySelector('#session-person'),membershipSelect=dialog.querySelector('#session-membership');
+    const sessionDraft=()=>({startsAt:new Date(form.startsAt.value+':00+03:00').toISOString(),sessionFormat:form.sessionFormat.value,durationMinutes:Number(form.durationMinutes.value),status:sessionTimeState(form.startsAt.value+':00+03:00',form.durationMinutes.value)});
+    const matching=personId=>sessionMemberships(studio.data.packages,studio.data.products,personId,sessionDraft());
+    const renderPeople=()=>{
+      let eligible=[];try{eligible=studio.data.clients.filter(person=>matching(person.id).length>0);}catch{}
+      const chosen=personSelect.value,chosenPackage=membershipSelect.value;
+      personSelect.innerHTML='<option value="">Выберите клиента</option>'+eligible.filter(person=>!selected.some(participant=>participant.personId===person.id)).map(person=>`<option value="${e(person.id)}">${e(studioPersonName(person))}</option>`).join('');
+      personSelect.value=eligible.some(person=>person.id===chosen&&!selected.some(participant=>participant.personId===chosen))?chosen:'';
+      const packages=personSelect.value?matching(personSelect.value):[];
+      membershipSelect.innerHTML='<option value="">Выберите пакет</option>'+packages.map(membership=>`<option value="${e(membership.id)}">${e(membership.name)} · доступно ${e(membership.visitsAvailable)}</option>`).join('');
+      membershipSelect.value=packages.some(membership=>membership.id===chosenPackage)?chosenPackage:packages[0]?.id||'';
+      const personal=form.sessionFormat.value==='PERSONAL_EQUIPMENT';
+      dialog.querySelector('#session-participant-help').textContent=(personal?'Персональная: один клиент с персональным пакетом.':'Групповая: несколько клиентов с групповыми пакетами.')+` Подходящих клиентов: ${eligible.length}. Выбрано: ${selected.length}/${form.capacity.value}. Пакет должен покрывать дату, формат и для прошлой даты — длительность занятия.`;
+      dialog.querySelector('#session-selected-people').innerHTML=selected.map(participant=>`<div class="calendar-participant"><div><strong>${e(studio.clientName(participant.personId))}</strong><small>${e(studio.membership(participant.membershipId)?.name||'Пакет')}</small></div><button type="button" data-remove-selected="${e(participant.personId)}">Убрать из списка</button></div>`).join('');
+      dialog.querySelectorAll('[data-remove-selected]').forEach(button=>button.onclick=()=>{selected=selected.filter(participant=>participant.personId!==button.dataset.removeSelected);update();});
+      dialog.querySelector('#session-participant-add').disabled=Boolean(pending)||selected.length>=Number(form.capacity.value)||!personSelect.value||!membershipSelect.value;
+    };
     const update=()=>{
-      this.creationDraft=Object.fromEntries(new FormData(form));
+      this.creationDraft={...Object.fromEntries(new FormData(form)),participants:selected};
       try{
+        form.capacity.readOnly=form.sessionFormat.value==='PERSONAL_EQUIPMENT';
         const status=sessionTimeState(form.startsAt.value+':00+03:00',form.durationMinutes.value);
         dialog.querySelector('#session-past-confirmation').hidden=status!=='COMPLETED';
         form.pastConfirmed.required=status==='COMPLETED';
+        form.attendanceReason.required=status==='COMPLETED'&&selected.length>0;
         dialog.querySelector('#session-create-submit').textContent=status==='COMPLETED'?'Внести прошедшую тренировку':status==='PLANNED'?'Запланировать тренировку':'Сохранить текущую тренировку';
-        dialog.querySelector('#session-time-note').textContent=status==='COMPLETED'?'Прошедшая дата: занятие сохранится как проведённое, без автоматических списаний.':status==='PLANNED'?'Будущая дата: занятие сохранится как запланированное.':'Занятие уже началось, но не закончилось: сохраняется подтверждённым, не завершённым.';
+        dialog.querySelector('#session-time-note').textContent=status==='COMPLETED'?`Прошедшая дата: выбранные участники считаются посетившими занятие. Будет списано по одному посещению: ${selected.length}.`:status==='PLANNED'?`Будущая дата: запланированное занятие. По одному посещению будет зарезервировано: ${selected.length}.`:'Занятие уже идёт: участников можно внести после его окончания.';
       }catch(error){dialog.querySelector('#session-time-note').textContent=error.message;}
+      renderPeople();
     };
+    form.sessionFormat.onchange=()=>{form.capacity.value=form.sessionFormat.value==='PERSONAL_EQUIPMENT'?1:4;update();};
+    dialog.querySelector('#session-participant-add').onclick=()=>{if(selected.length>=Number(form.capacity.value)||!personSelect.value||!membershipSelect.value)return;selected.push({personId:personSelect.value,membershipId:membershipSelect.value});update();};
     update();form.oninput=update;
     form.onsubmit=event=>{
       event.preventDefault();
-      try{this.creationDraft=Object.fromEntries(new FormData(form));const body=sessionCreationPayload(this.creationDraft,createOperationId());this.send('session',body,'/studio/sessions/create');}
+      try{
+        this.creationDraft={...Object.fromEntries(new FormData(form)),participants:selected};
+        const body=sessionCreationPayload(this.creationDraft,createOperationId());
+        if(body.sessionFormat==='PERSONAL_EQUIPMENT'&&(body.capacity!==1||selected.length>1))throw new Error('Персональная тренировка: только один клиент и одно место.');
+        if(selected.length>body.capacity||selected.some(participant=>!matching(participant.personId).some(membership=>membership.id===participant.membershipId)))throw new Error('Проверьте выбранных участников: вместимость или доступность пакетов изменилась.');
+        if(selected.length&&['CONFIRMED'].includes(body.status))throw new Error('Участники текущей тренировки вносятся после её окончания.');
+        this.send('session',{...body,participants:selected,attendanceReason:form.attendanceReason.value.trim()},'/studio/sessions/create');
+      }
       catch(error){studio.errorBox(error,'#session-create-error');}
     };
     if(pending){

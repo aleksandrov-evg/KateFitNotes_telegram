@@ -9,6 +9,10 @@ const page=await browser.newPage({viewport:{width:1440,height:1000}});
 page.setDefaultTimeout(8000);
 const errors=[];page.on('pageerror',error=>errors.push(error.message));
 const data={clients:[],products:[],packages:[],bookings:[],sessions:[],transactions:[],events:[]};
+const groupPerson='00000000-0000-4000-8000-000000000011',personalPerson='00000000-0000-4000-8000-000000000012';
+data.clients=[{id:groupPerson,name:{firstName:'Групповой клиент'}},{id:personalPerson,name:{firstName:'Персональный клиент'}},{id:'no-package',name:{firstName:'Без пакета'}}];
+data.products=[{id:'group-product',category:'GROUP_PACKAGE',sessionFormat:'GROUP_REFORMER',durationMinutes:55},{id:'personal-product',category:'PERSONAL',sessionFormat:'PERSONAL_EQUIPMENT',durationMinutes:55}];
+data.packages=[{id:'00000000-0000-4000-8000-000000000021',name:'Групповой пакет',personId:groupPerson,productId:'group-product',status:'ACTIVE',activatedAt:'2020-01-01T00:00:00Z',visitsAvailable:8},{id:'00000000-0000-4000-8000-000000000022',name:'Персональный пакет',personId:personalPerson,productId:'personal-product',status:'ACTIVE',activatedAt:'2020-01-01T00:00:00Z',visitsAvailable:8}];
 const writes=[],saved=new Map();
 let loseResponse=true;
 const origin=process.env.UI_SMOKE_URL||'http://127.0.0.1:5184/';
@@ -28,6 +32,11 @@ await page.route('**/api/v1/**',async route=>{
     session={id:'session-'+saved.size,...body,endsAt:new Date(new Date(body.startsAt).getTime()+body.durationMinutes*60000).toISOString(),bookedCount:0,attendedCount:0};
     saved.set(body.idempotencyKey,session);data.sessions.push(session);
     data.events.push({id:session.id,classSessionId:session.id,eventType:'SESSION_CREATED',outcome:'SUCCESS',occurredAt:new Date().toISOString()});
+    for(const participant of body.participants||[]){
+      data.bookings.push({id:session.id+'-booking',...participant,classSessionId:session.id,status:body.status==='COMPLETED'?'ATTENDED':'BOOKED',bookingType:body.sessionFormat==='PERSONAL_EQUIPMENT'?'PERSONAL':'REGULAR'});
+      data.transactions.push({id:session.id+'-transaction',membershipId:participant.membershipId,transactionType:body.status==='COMPLETED'?'CONSUME':'RESERVE',visitDelta:-1});
+      data.events.push({id:session.id+'-participant',classSessionId:session.id,eventType:'BOOKING_CREATED',outcome:'SUCCESS',occurredAt:new Date().toISOString()});
+    }
   }
   if(loseResponse){loseResponse=false;return reply({detail:'Результат создания не подтверждён. Повторите прежний запрос.'},502);}
   return reply({success:true,classSessionId:session.id,duplicate:writes.length===2});
@@ -43,6 +52,9 @@ try{
   assert.equal(await form.getByLabel('Дата и начало (Москва)').inputValue(),futureDay+'T09:00');
   await form.getByLabel('Название',{exact:true}).fill('Будущая тренировка');
   await form.getByLabel('Длительность, минут').fill('60');
+  assert.equal(await form.getByLabel('Доступный клиент').locator('option').count(),2);
+  await form.getByLabel('Доступный клиент').selectOption(groupPerson);
+  await form.getByRole('button',{name:'Добавить в список',exact:true}).click();
   await form.getByRole('button',{name:'Запланировать тренировку',exact:true}).click();
   await modal.getByRole('heading',{name:'Незавершённое создание'}).waitFor();
   await page.reload();
@@ -51,6 +63,8 @@ try{
   await modal.getByRole('heading',{name:'Будущая тренировка',exact:true}).waitFor();
   assert.equal(saved.size,1);assert.deepEqual(writes[0],writes[1]);
   assert.equal(writes[0].status,'PLANNED');assert.equal(writes[0].startsAt,futureDay+'T06:00:00.000Z');
+  assert.equal(writes[0].participants[0].personId,groupPerson);
+  assert.equal(data.bookings.length,1);
   await modal.getByText('Тренировка создана',{exact:true}).waitFor();
   await modal.getByRole('button',{name:'Закрыть',exact:true}).click();
   const event=page.getByRole('button',{name:/Будущая тренировка ·/});
@@ -71,12 +85,29 @@ try{
   await modal.getByRole('heading',{name:'Прошедшая тренировка',exact:true}).waitFor();
   assert.equal(writes.at(-1).status,'COMPLETED');
   assert.equal(writes.at(-1).pastConfirmed,true);
-  assert.equal(data.transactions.length,0);assert.equal(data.bookings.length,0);assert.equal(data.events.length,2);
+  assert.equal(data.transactions.length,1);assert.equal(data.bookings.length,1);assert.equal(data.events.length,3);
+  assert.equal(data.transactions[0].transactionType,'RESERVE');
+  await modal.getByRole('button',{name:'Закрыть',exact:true}).click();
+  await page.getByRole('button',{name:'+ Новая тренировка',exact:true}).click();
+  await form.getByLabel('Название',{exact:true}).fill('Персональная тренировка');
+  await form.getByLabel('Дата и начало (Москва)').fill(futureDay+'T11:00');
+  await form.getByLabel('Формат',{exact:true}).selectOption('PERSONAL_EQUIPMENT');
+  assert.equal(await form.getByLabel('Количество мест').inputValue(),'1');
+  assert.equal(await form.getByLabel('Количество мест').getAttribute('readonly'),'');
+  assert.equal(await form.getByLabel('Доступный клиент').locator('option').count(),2);
+  await form.getByLabel('Доступный клиент').selectOption(personalPerson);
+  await form.getByRole('button',{name:'Добавить в список',exact:true}).click();
+  assert.ok(await form.getByRole('button',{name:'Добавить в список',exact:true}).isDisabled());
+  await page.screenshot({path:join(tmpdir(),'gelios-personal-participant-picker.png'),fullPage:true});
+  await form.getByRole('button',{name:'Запланировать тренировку',exact:true}).click();
+  await modal.getByRole('heading',{name:'Персональная тренировка',exact:true}).waitFor();
+  assert.equal(writes.at(-1).participants[0].personId,personalPerson);
+  assert.equal(data.bookings.length,2);
   await modal.getByRole('button',{name:'Закрыть',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:join(tmpdir(),'gelios-time-grid-mobile.png'),fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   assert.deepEqual(errors,[]);
-  console.log('PASS: grid cell prefill, Moscow time, future creation, lost response/reload/retry, duration layout under CSP, existing click, past confirmation, no visits consumed, mobile.');
+  console.log('PASS: grid creation, available group/personal clients, selected packages, personal capacity, lost response/retry without duplicate people, empty historical session, mobile.');
 }catch(error){console.log('UI errors',errors);console.log(await page.locator('body').innerText());throw error;}
 finally{await browser.close();}

@@ -33,6 +33,14 @@ test('карточка предлагает принадлежащий клие�
   const packages=[valid,{...valid,id:'other',personId:'other'},{...valid,id:'expired',expiresOn:'2026-10-14'},{...valid,id:'empty',visitsAvailable:0}];
   assert.deepEqual(sessionMemberships(packages,[{id:'product',category:'GROUP_PACKAGE',sessionFormat:'GROUP_REFORMER'}],'person',session).map(item=>item.id),['valid']);
 });
+test('групповые и персональные пакеты не смешиваются, для прошлого совпадает длительность',()=>{
+  const membership={id:'package',personId:'person',productId:'product',status:'ACTIVE',visitsAvailable:1,activatedAt:'2020-01-01T00:00:00Z'};
+  const session={sessionFormat:'GROUP_REFORMER',startsAt:'2026-01-01T10:00:00Z'};
+  assert.equal(sessionMemberships([membership],[{id:'product',category:'PERSONAL',sessionFormat:'GROUP_REFORMER'}],'person',session).length,0);
+  const personal={...session,sessionFormat:'PERSONAL_EQUIPMENT'};
+  assert.equal(sessionMemberships([membership],[{id:'product',category:'PERSONAL',sessionFormat:'PERSONAL_EQUIPMENT'}],'person',personal).length,1);
+  assert.equal(sessionMemberships([membership],[{id:'product',category:'GROUP_PACKAGE',sessionFormat:'GROUP_REFORMER',durationMinutes:55}],'person',{...session,status:'COMPLETED',durationMinutes:60}).length,0);
+});
 test('создание будущего и прошедшего занятия использует московское время без списания',()=>{
   const now=new Date('2026-10-14T12:00:00Z');
   const values={name:' Тренировка ',sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T10:00',durationMinutes:'55',capacity:'4'};

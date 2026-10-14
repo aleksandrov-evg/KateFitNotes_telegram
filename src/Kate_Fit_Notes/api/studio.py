@@ -203,6 +203,12 @@ class CreateBookingRequest(BaseModel):
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
 
 
+class SessionParticipantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID = Field(alias="personId")
+    membership_id: UUID = Field(alias="membershipId")
+
+
 class CreateSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=200)
@@ -213,6 +219,8 @@ class CreateSessionRequest(BaseModel):
     status: Literal["PLANNED", "CONFIRMED", "COMPLETED"]
     past_confirmed: bool = Field(default=False, alias="pastConfirmed", strict=True)
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
+    participants: list[SessionParticipantRequest] = Field(default_factory=list, max_length=100)
+    attendance_reason: str = Field(default="", alias="attendanceReason", max_length=2000)
 
     @field_validator("starts_at")
     @classmethod

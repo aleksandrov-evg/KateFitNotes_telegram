@@ -56,6 +56,10 @@ def test_session_creation_uses_authenticated_command(calendar_api):
     assert requests[-1].url.path == "/s/studio/sessions/create"
     assert json.loads(requests[-1].content)["idempotencyKey"] == SESSION["idempotencyKey"]
     assert not any(request.url.path == "/rest/classSessions" for request in requests)
+    body = {**SESSION, "participants": [{"personId": BOOKING["personId"], "membershipId": BOOKING["membershipId"]}]}
+    assert browser.post("/api/v1/studio/sessions/create", json=body, headers=headers).status_code == 200
+    assert json.loads(requests[-1].content)["participants"] == body["participants"]
+    assert browser.post("/api/v1/studio/sessions/create", json={**body, "participants": [{"personId": "bad", "membershipId": BOOKING["membershipId"]}]}, headers=headers).status_code == 422
 
 
 @pytest.mark.parametrize("change", [{"startsAt": "2026-10-15T10:00:00"}, {"durationMinutes": 0}, {"durationMinutes": 1.5}, {"capacity": 101}, {"status": "CANCELLED"}, {"recordedBy": "operator"}])
