@@ -1,12 +1,18 @@
 import {Api} from './api.js';
+import {StudioUi} from './studio.js';
+import {studioNav} from './studio-domain.js';
 import {escapeHtml as e, today, addDays, weekStart, weekDays, formatDate, money, clientName, phoneLabel, normalizePhone, integer, activePackages, priceHint, slots, bookingPayload} from './domain.js';
 
 const root = document.querySelector('#app');
 const dialog = document.querySelector('#confirm');
 const nav = [['overview','Обзор','grid'],['schedule','Расписание','calendar'],['clients','Клиенты','users'],['personal','Перс. запись','user'],['group','Группа','users'],['prepaid','Предоплата','wallet'],['reports','Отчёт','chart']];
 const state = {clients:[],types:[],bookings:[],packages:[],reports:[],ready:false,page:'overview',week:weekStart(today()),year:today().slice(0,4),month:today().slice(0,7),query:'',packageFilter:'active',draft:null};
+let terfitLoaded = false;
 let generation = 0, slotGeneration = 0, saving = false, noticeTimer;
 const api = new Api({onUnauthorized:() => logout('Сессия завершена. Войдите снова.')});
+const studio = new StudioUi({api,page,header,notify,errorBox,showDialog});
+const isStudio = () => location.hash.startsWith('#gelios/');
+const modeSelector = () => `<label class="workspace-switch"><span>Рабочее пространство</span><select id="workspace-mode" aria-label="Рабочее пространство"><option value="terfit" ${!isStudio()?'selected':''}>Terfit · персональный учёт</option><option value="gelios" ${isStudio()?'selected':''}>Студия Gelios · CRM</option></select></label>`;
 function icon(name) {
   const paths = {grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',calendar:'M4 5h16v16H4z M4 10h16 M8 3v4 M16 3v4',users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M16 3a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-4 M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',user:'M20 21v-2a7 7 0 0 0-14 0v2 M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',wallet:'M3 5h17v16H3z M3 5V3h14 M15 11h6v5h-6z',chart:'M4 3v18h17 M8 17v-5 M13 17V7 M18 17V3',exit:'M9 4H4v16h5 M9 12h12 M17 8l4 4-4 4',menu:'M4 6h16 M4 12h16 M4 18h16',plus:'M12 5v14 M5 12h14',arrow:'M5 12h14 M14 7l5 5-5 5'};
   return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.grid}"/></svg>`;
@@ -27,7 +33,7 @@ function errorBox(error, target = '#page-error') {
   if (box) { box.textContent = error.message || String(error); box.hidden = false; box.scrollIntoView({block:'nearest'}); }
 }
 function logout(message = '') {
-  generation++; slotGeneration++; api.setToken(''); state.ready=false;
+  generation++; slotGeneration++; api.setToken(''); state.ready=false; terfitLoaded=false; studio.reset();
   for (const key of ['clients','bookings','packages','types','reports']) state[key]=[];
   state.draft=null; dialog.close(); renderLogin(); if(message) notify(message);
 }
@@ -42,25 +48,31 @@ function renderLogin() {
 }
 async function load() {
   const run=++generation;
+  if(isStudio()){state.ready=true;render();return;}
   root.innerHTML='<div class="loading" role="status"><div class="brand">KateFit Notes</div><p>Загружаем рабочий стол…</p></div>';
   try {
     const [clients,types,bookings,packages,reports]=await Promise.all([api.all('/clients'),api.request('/train-types'),api.all('/bookings'),api.all('/prepaid'),api.request('/reports/monthly')]);
     if(run!==generation) return;
-    Object.assign(state,{clients,types,bookings,packages,reports,ready:true}); render();
+    Object.assign(state,{clients,types,bookings,packages,reports,ready:true}); terfitLoaded=true; render();
   } catch(error) {
     if(run!==generation) return;
     root.innerHTML=`<main class="loading"><h1>Не удалось загрузить данные</h1><p class="error">${e(error.message)}</p><button class="primary" id="retry">Повторить</button><button id="exit">Выйти</button></main>`;
     document.querySelector('#retry').onclick=load; document.querySelector('#exit').onclick=()=>logout();
   }
 }
-function currentPage() { const page=location.hash.slice(1).split('?')[0]; return nav.some(n=>n[0]===page)?page:'overview'; }
+function currentPage() { const page=location.hash.slice(1).split('?')[0]; const items=isStudio()?studioNav:nav; return items.some(n=>n[0]===page)?page:isStudio()?'gelios/overview':'overview'; }
 function render() {
   if(!api.token) return renderLogin();
   if(!state.ready) return;
+  if(!isStudio()&&!terfitLoaded){studio.deactivate();return load();}
+  const activeNav=isStudio()?studioNav:nav;
   const page=currentPage(); if(page!==state.page) {state.draft=null;state.query='';} state.page=page;
-  root.innerHTML=`<div class="app-shell"><aside class="sidebar"><a href="#overview" class="brand">KateFit Notes<span>рабочий стол тренера</span></a><nav aria-label="Основная навигация">${nav.map(([id,label,glyph])=>`<a href="#${id}" class="nav-item ${page===id?'active':''}" ${page===id?'aria-current="page"':''}>${icon(glyph)}${label}</a>`).join('')}</nav><div class="account"><span class="avatar accent">К</span><div>Катя<small>один аккаунт</small></div><button id="logout" class="icon-button" aria-label="Выйти">${icon('exit')}</button></div></aside><div class="mobile-header"><a class="brand" href="#overview">KATEFIT <b>NOTES</b></a><button id="menu-toggle" class="icon-button" aria-label="Открыть меню" aria-expanded="false">${icon('menu')}</button></div><main id="main" tabindex="-1"><div id="page-error" class="error" role="alert" hidden></div><div id="page"></div></main></div>`;
+  root.innerHTML=`<div class="app-shell ${isStudio()?'studio-shell':''}"><aside class="sidebar"><a href="${isStudio()?'#gelios/overview':'#overview'}" class="brand">KateFit Notes<span>${isStudio()?'студия Gelios':'рабочий стол тренера'}</span></a>${modeSelector()}<nav aria-label="Основная навигация">${activeNav.map(([id,label,glyph])=>`<a href="#${id}" class="nav-item ${page===id?'active':''}" ${page===id?'aria-current="page"':''}>${icon(glyph)}${label}</a>`).join('')}</nav><div class="account"><span class="avatar accent">К</span><div>Катя<small>один аккаунт</small></div><button id="logout" class="icon-button" aria-label="Выйти">${icon('exit')}</button></div></aside><div class="mobile-header"><a class="brand" href="${isStudio()?'#gelios/overview':'#overview'}">KATEFIT <b>NOTES</b></a><button id="menu-toggle" class="icon-button" aria-label="Открыть меню" aria-expanded="false">${icon('menu')}</button></div><main id="main" tabindex="-1"><div id="page-error" class="error" role="alert" hidden></div><div id="page"></div></main></div>`;
   document.querySelector('#logout').onclick=()=>logout();
+  document.querySelector('#workspace-mode').onchange=event=>{if(saving||studio.saving){event.target.value=isStudio()?'gelios':'terfit';return notify('Дождитесь ответа сервера.');} studio.deactivate();location.hash=event.target.value==='gelios'?'gelios/overview':'overview';};
   document.querySelector('#menu-toggle').onclick=event=>{const open=root.querySelector('.app-shell').classList.toggle('menu-open');event.currentTarget.setAttribute('aria-expanded',String(open));};
+  if(isStudio())return studio.render(page.split('/')[1]);
+  studio.deactivate();
   ({overview:renderOverview,schedule:renderSchedule,clients:renderClients,personal:renderBooking,group:renderBooking,prepaid:renderPrepaid,reports:renderReports})[page]();
 }
 function header(title,subtitle,actions='') {return `<header class="page-header"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="actions">${actions}<button class="icon-button refresh" title="Обновить данные" aria-label="Обновить данные">↻</button></div></header>`;}
@@ -270,6 +282,11 @@ function showDialog(title,body,onConfirm,onError) {
   };
   dialog.showModal();
 }
+root.addEventListener('click',event=>{
+  if((saving||studio.saving)&&event.target.closest('a,#logout')){
+    event.preventDefault();event.stopPropagation();notify('Дождитесь результата сохранения.');
+  }
+},true);
 window.addEventListener('hashchange',()=>{if(dialog.open&&!saving)dialog.close();render();});
 window.addEventListener('keydown',event=>{if(event.key==='Escape'){root.querySelector('.app-shell')?.classList.remove('menu-open');document.querySelector('#menu-toggle')?.setAttribute('aria-expanded','false');}});
 if(api.token)load();else renderLogin();

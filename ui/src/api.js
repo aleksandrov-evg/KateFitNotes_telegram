@@ -22,9 +22,9 @@ export class Api {
     const data = await response.json().catch(() => null);
     if (!response.ok) {
       if (response.status === 401 && path !== '/auth/login') { this.setToken(''); this.onUnauthorized(); }
-      let message = typeof data?.detail === 'string' ? data.detail : 'Не удалось выполнить запрос. Попробуйте позже.';
+      let message = typeof data?.detail === 'string' ? data.detail : data?.detail?.message || 'Не удалось выполнить запрос. Попробуйте позже.';
       if (response.status === 422 && Array.isArray(data?.detail)) message = 'Проверьте заполнение полей: сервер отклонил данные.';
-      if (response.status >= 500) message = 'Сервер временно недоступен. Повторите попытку позже.';
+      if (response.status >= 500 && !data?.detail) message = 'Сервер временно недоступен. Повторите попытку позже.';
       throw new ApiError(message,response.status);
     }
     return data;
@@ -39,5 +39,19 @@ export class Api {
       if (offset >= page.total) return items;
       if (!page.items.length) throw new ApiError('Список изменился во время загрузки. Обновите данные.',0);
     }
+  }
+  async studioRecords(resource) {
+    const items = [], seen = new Set();
+    let cursor = null;
+    for (let page = 0; page < 100; page++) {
+      const query = cursor ? '?' + new URLSearchParams({cursor}) : '';
+      const result = await this.request(`/studio/records/${resource}${query}`);
+      if (!Array.isArray(result?.items)) throw new ApiError('CRM вернула некорректный список.',502);
+      items.push(...result.items);
+      if (!result.next_cursor) return items;
+      if (seen.has(result.next_cursor)) throw new ApiError('CRM повторила страницу списка. Обновите данные.',502);
+      seen.add(result.next_cursor); cursor = result.next_cursor;
+    }
+    throw new ApiError('Список слишком велик. Требуется серверная фильтрация.',502);
   }
 }
