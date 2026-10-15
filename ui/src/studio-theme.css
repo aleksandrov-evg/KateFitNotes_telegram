@@ -129,6 +129,21 @@
 .studio-shell .section-header .studio-select { width: 180px; }
 .studio-shell .workspace-switch .studio-select > button { background: #52313b; color: #fff; border-color: #79545f; font-size: 12px; }
 .studio-shell .workspace-switch .studio-select-menu { color: #3b292e; }
+.studio-mode dialog[open] { display: flex; flex-direction: column; padding: 8px; max-height: calc(100dvh - 48px); overflow: hidden; }
+.studio-mode dialog > #dialog-title { flex-shrink: 0; margin: 0; padding: 20px 24px; }
+.studio-mode .studio-dialog-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 24px 20px; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #d5b9c2 transparent; }
+.studio-mode dialog > .dialog-actions { flex-shrink: 0; padding: 16px 24px; margin: 0 16px; }
+.studio-mode .calendar-session-details { display: grid; gap: 28px; }
+.studio-mode .calendar-session-details section { min-width: 0; }
+.studio-mode .calendar-session-details h3 { margin: 0 0 14px; }
+.studio-mode .calendar-session-summary dl { margin: 0; row-gap: 12px; }
+.studio-mode .calendar-session-summary dd { min-width: 0; overflow-wrap: anywhere; }
+.studio-mode .calendar-session-actions { display: grid; gap: 16px; justify-items: start; }
+.studio-mode .calendar-session-actions .note { width: 100%; margin: 0; line-height: 1.7; }
+.studio-mode .calendar-session-details #calendar-pending:empty { display: none; }
+.studio-mode .calendar-history p { padding: 14px 0; }
+.studio-mode .calendar-history p:first-child { padding-top: 0; }
+.studio-mode .calendar-history p:last-child { border-bottom: 0; padding-bottom: 0; }
 @media (min-width: 1600px) { .studio-shell #main { margin: 0 auto; } }
 @media (max-width: 1200px) {
   .studio-shell #main { padding: 32px; }
@@ -169,6 +184,10 @@
   .studio-shell .section-header { flex-wrap: wrap; }
   .studio-shell .section-header select { width: auto; max-width: 180px; font-size: 12px; }
   .studio-mode dialog, .studio-mode .calendar-dialog { width: calc(100vw - 24px); padding: 24px 20px; border-radius: 16px; }
+  .studio-mode dialog[open] { padding: 6px; max-height: calc(100dvh - 24px); }
+  .studio-mode dialog > #dialog-title { padding: 16px 14px; }
+  .studio-mode .studio-dialog-body { padding: 4px 14px 20px; }
+  .studio-mode dialog > .dialog-actions { padding: 14px 8px; margin: 0 8px; }
   .studio-mode dialog h2 { font-size: 20px; }
   .studio-mode .calendar-dialog .two-fields { grid-template-columns: 1fr; }
 }
