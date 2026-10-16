@@ -14,7 +14,7 @@ services:
     build:
       context: .
       dockerfile: dockerfile.api
-    image: katefit-api:latest
+    image: ${API_IMAGE:-katefit-api:latest}
     restart: unless-stopped
     environment:
       TZ: Europe/Moscow
@@ -37,7 +37,7 @@ services:
       dokploy-network:
         # Имя для других compose-проектов в общей внешней сети.
         aliases:
-          - katefit-api
+          - ${API_NETWORK_ALIAS:-katefit-api}
 
 networks:
   dokploy-network:

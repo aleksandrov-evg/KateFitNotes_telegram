@@ -181,12 +181,14 @@ DATABASE_URL='postgresql://USER:PASS@localhost:5433/Kate_fitness_test' \
 
 ## Отдельные prod и stage для сайта и API
 
-| Настройка | Prod (текущие Compose-дефолты) | Stage |
+| Настройка | Prod | Stage |
 | --- | --- | --- |
-| Compose API | `docker-compose.api.yml` | `docker-compose.api.stage.yml` |
-| Compose сайта | `docker-compose.ui.yml` | `docker-compose.ui.stage.yml` |
+| Compose API | `docker-compose.api.yml` | `docker-compose.api.yml` |
+| Compose сайта | `docker-compose.ui.yml` | `docker-compose.ui.yml` |
 | `API_HOST_PORT` | `8000` | `8001` |
 | `UI_HOST_PORT` | `8080` | `8081` |
+| `API_NETWORK_ALIAS` | `katefit-api` | `katefit-api-stage` |
+| `API_IMAGE` | `katefit-api:latest` | `katefit-api-stage:latest` |
 | `UI_API_ORIGIN` | `http://katefit-api:8000` | `http://katefit-api-stage:8000` |
 | `SQL_DATABASE` | `Kate_fitness` | явно задать отдельную БД, например `Kate_fitness_stage` |
 
@@ -194,12 +196,12 @@ DATABASE_URL='postgresql://USER:PASS@localhost:5433/Kate_fitness_test' \
 API `8000`, сайт `80`. Именно внутренние порты указывайте в Domain Dokploy
 для сервисов `api` и `ui` соответственно, в обоих окружениях.
 `UI_PORT` относится только к локальному dev-серверу, для Docker нужен `UI_HOST_PORT`.
-Значения prod в таблице взяты из конфигурации репозитория; фактические настройки
+Значения prod в таблице соответствуют шаблону `.env.example`; фактические настройки
 запущенного Dokploy могут отличаться. На сервере порты `8001` и `8081` должны быть свободны.
 
 В Dokploy создайте два отдельных Compose-проекта stage (API и сайт), укажите
-соответствующие stage Compose Path из таблицы. Шаблон переменных —
-[.env.stage.example](.env.stage.example): в API передайте `API_HOST_PORT`,
+те же Compose Path, что у prod, из таблицы. Шаблон переменных —
+[.env.stage.example](.env.stage.example): в API передайте `API_HOST_PORT`, `API_NETWORK_ALIAS`, `API_IMAGE`,
 `SQL_*`, `DB_*`, `API_USER`, `API_PASSWORD`, `API_JWT_SECRET` и при необходимости
 `CRM_*`; в сайт — `UI_HOST_PORT` и `UI_API_ORIGIN`.
 Оба проекта подключаются к внешней `dokploy-network`. Stage API имеет отдельный
@@ -210,11 +212,12 @@ API `8000`, сайт `80`. Именно внутренние порты указ
 из `.env.stage.example` и заполните его:
 
 ```bash
-docker compose --env-file .env.stage -f docker-compose.api.stage.yml up -d --build
-docker compose --env-file .env.stage -f docker-compose.ui.stage.yml up -d --build
+docker compose -p katefit-api-stage --env-file .env.stage -f docker-compose.api.yml up -d --build
+docker compose -p katefit-ui-stage --env-file .env.stage -f docker-compose.ui.yml up -d --build
 ```
 
-БД stage и её пользователь создаются отдельно. Используйте собственные пароли
+В общем YAML `SQL_DATABASE` по умолчанию — `Kate_fitness`: для stage обязательно
+явно задайте `SQL_DATABASE=Kate_fitness_stage`. БД stage и её пользователь создаются отдельно. Используйте собственные пароли
 и JWT-секрет; CRM-интеграция stage по умолчанию выключена. Compose не создаёт
 базу и не применяет миграции. После запуска проверьте API `/health` на порту
 `8001` и сайт `/healthz` на порту `8081`, затем вход через сайт stage.
