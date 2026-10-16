@@ -18,6 +18,12 @@ export const eligibleProducts = products => products
   );
 export const personPackages = (packages, personId) => packages.filter(record => relationId(record,'person') === personId);
 export const calendarDate = value => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow'}).format(new Date(value));
+export const paymentStartOfMoscowDay = value => {
+  const day = String(value || '').slice(0,10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const paidAt = new Date(`${day}T00:00:00+03:00`);
+  return Number.isFinite(paidAt.getTime()) && calendarDate(paidAt) === day ? paidAt : null;
+};
 export const sessionParticipants = (bookings, sessionId) => bookings.filter(booking => relationId(booking,'classSession') === sessionId && ['BOOKED','CONFIRMED','ATTENDED'].includes(booking.status));
 export const sessionCanAdd = (session, bookings, now = new Date()) => ['PLANNED','CONFIRMED'].includes(session.status) && new Date(session.startsAt) > now && sessionParticipants(bookings,session.id).length < Number(session.capacity);
 export const sessionFormats = [['GROUP_REFORMER','Группа на реформере'],['INTRO_REFORMER','Intro на реформере'],['PERSONAL_EQUIPMENT','Персональное на оборудовании'],['SPLIT_EQUIPMENT','Сплит на оборудовании'],['MAT_PILATES','Пилатес на коврике'],['STRETCHING','Стрейчинг'],['TRX','TRX']];

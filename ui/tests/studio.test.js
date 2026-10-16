@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Api} from '../src/api.js';
 import {StudioUi} from '../src/studio.js';
-import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from '../src/studio-domain.js';
+import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,paymentStartOfMoscowDay,sessionParticipants,sessionCanAdd,sessionMemberships,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from '../src/studio-domain.js';
 
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};};
 const json=body=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
@@ -26,6 +26,11 @@ test('календарь группирует по Москве и считае�
   assert.equal(sessionCanAdd(session,[{classSessionId:'session',status:'BOOKED'}]),false);
   assert.equal(sessionCanAdd({...session,status:'COMPLETED'},[]),false);
   assert.equal(sessionCanAdd({...session,startsAt:'2020-01-01T10:00:00Z'},[]),false);
+});
+test('оплата пакета начинается в 00:00 по Москве выбранной даты',()=>{
+  assert.equal(paymentStartOfMoscowDay('2026-10-16T17:25').toISOString(),'2026-10-15T21:00:00.000Z');
+  assert.equal(paymentStartOfMoscowDay('2026-10-16').toISOString(),'2026-10-15T21:00:00.000Z');
+  assert.equal(paymentStartOfMoscowDay('not-a-date'),null);
 });
 test('карточка предлагает принадлежащий клиенту пакет подходящего формата и даты',()=>{
   const session={sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T10:00:00Z'};

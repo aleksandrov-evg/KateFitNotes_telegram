@@ -1,7 +1,7 @@
 import {escapeHtml as e, money} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
 import {setStudioSelectClients} from './studio-select.js';
-import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate} from './studio-domain.js';
+import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate, paymentStartOfMoscowDay} from './studio-domain.js';
 
 let fieldSequence = 0;
 const field = (label, input) => {
@@ -105,7 +105,11 @@ export class StudioUi {
       <section class="panel packages-panel studio-package-list"><div class="section-header"><h2>Пакеты клиентов</h2><select id="studio-package-filter" aria-label="Статус пакета"><option value="all">Все</option><option value="ACTIVE">Активные</option><option value="EXHAUSTED">Использованные</option></select></div><div id="studio-packages"></div></section>`);
     const form=document.querySelector('#studio-payment-form');
     form.personId.value=new URLSearchParams(location.hash.split('?')[1]||'').get('client')||'';
-    const now=new Date();form.paidAt.value=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+    form.paidAt.value=calendarDate(new Date())+'T00:00';
+    form.paidAt.onchange=()=>{
+      const day=form.paidAt.value.slice(0,10);
+      if(day)form.paidAt.value=day+'T00:00';
+    };
     const updateSummary=()=>{
       const product=this.product(form.productId.value);
       const method={CASH:'Наличные',SBP:'СБП',CARD:'Карта'}[form.paymentMethod.value];
@@ -120,7 +124,7 @@ export class StudioUi {
       try {
       const values=Object.fromEntries(new FormData(form)),product=this.product(values.productId);
       if(!product)throw new Error('Выберите доступный продукт.');
-      const paidAt=new Date(values.paidAt);
+      const paidAt=paymentStartOfMoscowDay(values.paidAt);
       if(!Number.isFinite(paidAt.getTime()))throw new Error('Укажите корректную дату оплаты.');
       if(paidAt>new Date())return this.errorBox(new Error('Оплата не может быть в будущем.'),'#studio-form-error');
       const body={personId:values.personId,productId:product.id,paidAt:paidAt.toISOString(),paymentMethod:values.paymentMethod,amount:currencyAmount(product.price),idempotencyKey:createOperationId(),...(values.fiscalReceiptId.trim()?{fiscalReceiptId:values.fiscalReceiptId.trim()}:{})};
