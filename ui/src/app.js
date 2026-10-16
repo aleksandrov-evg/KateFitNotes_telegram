@@ -29,14 +29,14 @@ function notify(message) {
   clearTimeout(noticeTimer); const box = document.querySelector('#notice'); box.textContent = message; box.classList.add('visible');
   noticeTimer = setTimeout(()=>box.classList.remove('visible'),6000);
 }
-function errorBox(error, target = '#page-error') {
+function errorBox(error, target = '#page-error', context = {}) {
   const box = document.querySelector(target);
   if (!box) return;
   const message = error.message || String(error);
   if (target === '#page-error' && isStudio()) {
-    const view = studioCrmError(message);
+    const view = studioCrmError(message, context.requestBody);
     box.classList.add('crm-error');
-    box.innerHTML = `<div class="crm-error-icon" aria-hidden="true">!</div><div><strong>${e(view.title)}</strong><p>${e(view.description)}</p><details><summary>Технические детали</summary><code>${e(view.technical)}</code></details></div>`;
+    box.innerHTML = `<div class="crm-error-icon" aria-hidden="true">!</div><div><strong>${e(view.title)}</strong><p>${e(view.description)}</p><details><summary>Технические детали</summary><span>Ответ CRM</span><code>${e(view.technical)}</code>${view.payload?`<span>Отправленный запрос</span><pre>${e(view.payload)}</pre>`:''}</details></div>`;
   } else {
     box.classList.remove('crm-error');
     box.textContent = message;

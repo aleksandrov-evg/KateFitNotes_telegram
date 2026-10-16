@@ -33,9 +33,13 @@ test('оплата пакета начинается в 00:00 по Москве 
   assert.equal(paymentStartOfMoscowDay('not-a-date'),null);
 });
 test('ошибка дубликата клиента отображается понятным текстом',()=>{
-  const view=studioCrmError('A duplicate entry was detected: unique constraint person.IDX_UNIQUE_42 was violated');
+  const view=studioCrmError(
+    'A duplicate entry was detected: unique constraint person.IDX_UNIQUE_42 was violated',
+    {firstName:'Катя',phone:'9210000000'},
+  );
   assert.equal(view.title,'Клиент уже есть в CRM');
   assert.match(view.description,/проверьте журнал/i);
+  assert.match(view.payload,/"firstName": "Катя"/);
 });
 test('карточка предлагает принадлежащий клиенту пакет подходящего формата и даты',()=>{
   const session={sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T10:00:00Z'};

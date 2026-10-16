@@ -218,7 +218,7 @@ export class StudioUi {
       if(generation===this.generation)await this.render(route,true);
     } catch(error) {
       if(error.status>=400&&error.status<500)this.pending.clear(kind);
-      if(generation===this.generation){await this.render(route);this.errorBox(error);}
+      if(generation===this.generation){await this.render(route);this.errorBox(error,'#page-error',{requestBody:body});}
       if(propagate)throw error;
     } finally {this.saving=false;}
   }
