@@ -18,6 +18,23 @@ from src.Kate_Fit_Notes.api.auth import require_user
 from src.Kate_Fit_Notes.settings import ConfigError
 
 
+def _crm_error_message(result: dict, fallback: str = "Операция CRM не выполнена.") -> str:
+    """Берёт безопасное пояснение ошибки из распространённых форматов Twenty."""
+    candidates: list[object] = [result.get("message")]
+    error = result.get("error")
+    if isinstance(error, dict):
+        candidates.append(error.get("message"))
+    errors = result.get("errors")
+    if isinstance(errors, list):
+        for item in errors:
+            if isinstance(item, dict):
+                candidates.append(item.get("message"))
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()[:500]
+    return fallback
+
+
 @dataclass(frozen=True)
 class StudioSettings:
     base_url: str
@@ -74,13 +91,25 @@ class StudioCrm:
             raise HTTPException(502, "CRM вернула некорректный ответ.")
         if response.status_code >= 400:
             status_code = response.status_code if 400 <= response.status_code < 500 else 502
-            raise HTTPException(status_code, {"code": result.get("code", "CRM_ERROR"), "message": result.get("message", "Операция CRM не выполнена.")})
+            raise HTTPException(
+                status_code,
+                {
+                    "code": result.get("code", "CRM_ERROR"),
+                    "message": _crm_error_message(result),
+                },
+            )
         return result
 
     def command(self, path: str, body: dict) -> dict:
         result = self.request("POST", f"/s{path}", body=body)
         if result.get("success") is not True:
-            raise HTTPException(409, {"code": result.get("code", "CRM_ERROR"), "message": result.get("message", "Операция CRM не выполнена.")})
+            raise HTTPException(
+                409,
+                {
+                    "code": result.get("code", "CRM_ERROR"),
+                    "message": _crm_error_message(result),
+                },
+            )
         return result
 
     def record_event(self, event: dict) -> None:
@@ -201,9 +230,17 @@ class ClientRequest(BaseModel):
         return value
 
     def crm_data(self) -> dict:
-        return {"name": {"firstName": self.first_name, "lastName": self.last_name},
-                "phones": {"primaryPhoneNumber": self.phone, "primaryPhoneCountryCode": "RU", "primaryPhoneCallingCode": "+7"},
-                "emails": {"primaryEmail": self.email}}
+        data = {
+            "name": {"firstName": self.first_name, "lastName": self.last_name},
+            "phones": {
+                "primaryPhoneNumber": self.phone,
+                "primaryPhoneCountryCode": "RU",
+                "primaryPhoneCallingCode": "+7",
+            },
+        }
+        if self.email:
+            data["emails"] = {"primaryEmail": self.email}
+        return data
 
 
 class PackagePaymentRequest(BaseModel):

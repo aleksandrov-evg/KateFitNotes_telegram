@@ -91,6 +91,16 @@ def test_client_creation_normalizes_contact_and_recovers_lost_response(records_a
     assert browser.post("/api/v1/studio/clients", json={**CLIENT, "clientId": ATTENDANCE["membershipId"]}, headers=headers).status_code == 409
 
 
+def test_client_without_email_does_not_send_empty_email_to_crm(records_app):
+    browser, remote, headers = records_app
+    payload = {**CLIENT, "clientId": ATTENDANCE["membershipId"], "email": ""}
+
+    response = browser.post("/api/v1/studio/clients", json=payload, headers=headers)
+
+    assert response.status_code == 200
+    assert "emails" not in remote.people[payload["clientId"]]
+
+
 @pytest.mark.parametrize("extra", [{"phone": "123"}, {"email": "bad"}, {"recordedBy": "user"}, {"apiKey": "browser-secret"}])
 def test_client_validation_before_crm(records_app, extra):
     browser, remote, headers = records_app
