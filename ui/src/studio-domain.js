@@ -8,7 +8,14 @@ export const studioNav = [
 export const studioPersonName = person => [person?.name?.firstName,person?.name?.lastName].filter(Boolean).join(' ') || 'Клиент без имени';
 export const relationId = (record, relation) => record?.[relation + 'Id'] || record?.[relation]?.id;
 export const currencyAmount = value => Number(value?.amountMicros || 0) / 1000000;
-export const eligibleProducts = products => products.filter(product => product.isActive && ['GROUP_PACKAGE','PERSONAL'].includes(product.category));
+const productNameCollator = new Intl.Collator('ru', {sensitivity:'base'});
+export const eligibleProducts = products => products
+  .filter(product => product.isActive && ['GROUP_PACKAGE','PERSONAL'].includes(product.category))
+  .sort((left,right) =>
+    productNameCollator.compare(left.name || '', right.name || '') ||
+    currencyAmount(left.price) - currencyAmount(right.price) ||
+    String(left.id || '').localeCompare(String(right.id || ''))
+  );
 export const personPackages = (packages, personId) => packages.filter(record => relationId(record,'person') === personId);
 export const calendarDate = value => new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Moscow'}).format(new Date(value));
 export const sessionParticipants = (bookings, sessionId) => bookings.filter(booking => relationId(booking,'classSession') === sessionId && ['BOOKED','CONFIRMED','ATTENDED'].includes(booking.status));

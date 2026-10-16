@@ -74,6 +74,17 @@ test('Gelios использует собственную навигацию и U
 test('продажа предлагает только активные групповые и персональные пакеты',()=>{
   assert.deepEqual(eligibleProducts([{id:'one',category:'GROUP_PACKAGE',isActive:true},{category:'SPLIT',isActive:true},{category:'PERSONAL',isActive:false}]).map(item=>item.id),['one']);
 });
+test('доступные продукты отсортированы по названию, затем по стоимости',()=>{
+  const products=[
+    {id:'personal-4k',name:'Персональное',price:{amountMicros:4_000_000_000},category:'PERSONAL',isActive:true},
+    {id:'group-16k',name:'Группа 8',price:{amountMicros:16_000_000_000},category:'GROUP_PACKAGE',isActive:true},
+    {id:'personal-3k',name:'Персональное',price:{amountMicros:3_000_000_000},category:'PERSONAL',isActive:true},
+    {id:'group-8k',name:'Группа 4',price:{amountMicros:8_800_000_000},category:'GROUP_PACKAGE',isActive:true},
+  ];
+  assert.deepEqual(eligibleProducts(products).map(product=>product.id),[
+    'group-8k','group-16k','personal-3k','personal-4k',
+  ]);
+});
 test('прошедшая тренировка получает длительность из продукта и тот же ключ',()=>{
   const body=attendancePayload({personId:'person',startsAt:'2020-01-01T10:00:00+03:00',reason:' Журнал ',source:'ADMIN'}, {id:'package',personId:'person'},{durationMinutes:55},'stable-key');
   assert.equal(body.startsAt,'2020-01-01T07:00:00.000Z');
