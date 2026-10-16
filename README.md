@@ -221,3 +221,8 @@ docker compose -p katefit-ui-stage --env-file .env.stage -f docker-compose.ui.ym
 и JWT-секрет; CRM-интеграция stage по умолчанию выключена. Compose не создаёт
 базу и не применяет миграции. После запуска проверьте API `/health` на порту
 `8001` и сайт `/healthz` на порту `8081`, затем вход через сайт stage.
+
+Плашка тестового стенда: в UI-проекте Dokploy задайте `UI_ENVIRONMENT=stage`.
+Она постоянно видна в Terfit, Studio Gelios и на экране входа. В prod используйте
+`UI_ENVIRONMENT=production` (значение по умолчанию). После первого обновления
+образа UI переключение выполняется через env и перезапуск контейнера.

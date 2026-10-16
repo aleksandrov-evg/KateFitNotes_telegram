@@ -1,3 +1,8 @@
+map "${UI_ENVIRONMENT}" $environment_styles {
+    default "";
+    stage "@import url('/src/stage-banner.css');";
+}
+
 server {
     listen 80;
     server_name _;
@@ -13,6 +18,10 @@ server {
     add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" always;
     add_header Cache-Control "no-store" always;
 
+    location = /environment.css {
+        default_type text/css;
+        return 200 $environment_styles;
+    }
     location = /healthz { access_log off; return 200 'ok'; }
     location /api/ {
         proxy_pass $api_origin$request_uri;

@@ -9,6 +9,15 @@ from urllib.request import Request, urlopen
 
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
+        if self.path == '/environment.css':
+            data = b"@import url('/src/stage-banner.css');" if os.environ.get('UI_ENVIRONMENT') == 'stage' else b''
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/css')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if self.path.startswith('/api/'):
             return self.proxy()
         return super().do_GET()
