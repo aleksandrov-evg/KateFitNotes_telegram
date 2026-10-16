@@ -43,6 +43,7 @@ class FakeRecordsCrm:
             return httpx.Response(200, json={"data": {"person": person}}) if person else httpx.Response(404, json={"message": "Not found"})
         if request.method == "POST" and path == "/rest/people":
             body = json.loads(request.content)
+            body["id"] = "created-" + str(len(self.people) + 1)
             self.people[body["id"]] = body
             if self.timeout:
                 raise httpx.ReadTimeout("timeout", request=request)
@@ -80,15 +81,16 @@ def test_client_creation_normalizes_contact_and_recovers_lost_response(records_a
     assert browser.post("/api/v1/studio/clients", json=CLIENT, headers=headers).status_code == 502
     remote.timeout = False
     repeated = browser.post("/api/v1/studio/clients", json=CLIENT, headers=headers)
-    assert repeated.json() == {"id": CLIENT["clientId"], "duplicate": True}
+    assert repeated.json() == {"id": "created-1", "duplicate": True}
     creates = [request for request in remote.requests if request.method == "POST" and request.url.path == "/rest/people"]
     assert len(creates) == 1
-    person = remote.people[CLIENT["clientId"]]
+    assert "id" not in json.loads(creates[0].content)
+    person = remote.people["created-1"]
     assert person["name"] == {"firstName": "Катя", "lastName": "Иванова"}
     assert person["phones"]["primaryPhoneNumber"] == "9210000000"
     assert person["phones"]["primaryPhoneCallingCode"] == "+7"
     assert browser.post("/api/v1/studio/clients", json={**CLIENT, "firstName": "Другое имя"}, headers=headers).status_code == 409
-    assert browser.post("/api/v1/studio/clients", json={**CLIENT, "clientId": ATTENDANCE["membershipId"]}, headers=headers).status_code == 409
+    assert browser.post("/api/v1/studio/clients", json={**CLIENT, "clientId": ATTENDANCE["membershipId"]}, headers=headers).json() == {"id": "created-1", "duplicate": True}
 
 
 def test_client_without_email_does_not_send_empty_email_to_crm(records_app):
@@ -98,7 +100,7 @@ def test_client_without_email_does_not_send_empty_email_to_crm(records_app):
     response = browser.post("/api/v1/studio/clients", json=payload, headers=headers)
 
     assert response.status_code == 200
-    assert "emails" not in remote.people[payload["clientId"]]
+    assert "emails" not in remote.people[response.json()["id"]]
 
 
 @pytest.mark.parametrize("extra", [{"phone": "123"}, {"email": "bad"}, {"recordedBy": "user"}, {"apiKey": "browser-secret"}])

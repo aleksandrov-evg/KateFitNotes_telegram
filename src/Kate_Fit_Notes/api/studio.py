@@ -176,27 +176,28 @@ class StudioCrm:
         event = {"id": str(person.client_id), "name": "Клиент добавлен из UI", "eventType": "CLIENT_CREATED",
                  "outcome": "SUCCESS", "idempotencyKey": str(person.client_id),
                  "details": json.dumps({"personId": str(person.client_id), "source": "KATEFIT_UI", "operator": username}, ensure_ascii=False, sort_keys=True)}
-        # A browser-generated UUID keeps a retry after a lost response from creating another person.
-        try:
-            existing = self.request("GET", f"/rest/people/{person.client_id}").get("data", {}).get("person")
-        except HTTPException as exc:
-            if exc.status_code != 404:
-                raise
-            existing = None
-        if existing:
-            existing_name = existing.get("name") or {}
-            if existing_name.get("firstName") != person.first_name or (existing_name.get("lastName") or "") != person.last_name or (existing.get("phones") or {}).get("primaryPhoneNumber") != person.phone or ((existing.get("emails") or {}).get("primaryEmail") or "") != person.email:
-                raise HTTPException(409, "Ключ клиента уже использован с другими данными.")
-            self.record_event(event)
-            return {"id": str(person.client_id), "duplicate": True}
         matches = self.request("GET", "/rest/people", params={"limit": 1, "filter": f"phones.primaryPhoneNumber[eq]:{person.phone}"}).get("data", {}).get("people")
         if not isinstance(matches, list):
             raise HTTPException(502, "Не удалось проверить дубликат клиента.")
         if matches:
-            raise HTTPException(409, "Клиент с таким телефоном уже есть в CRM. Найдите его в списке.")
-        result = self.request("POST", "/rest/people", body={"id": str(person.client_id), **data})
+            existing = matches[0]
+            existing_name = existing.get("name") or {}
+            same_person = (
+                existing_name.get("firstName") == person.first_name
+                and (existing_name.get("lastName") or "") == person.last_name
+                and (existing.get("phones") or {}).get("primaryPhoneNumber") == person.phone
+                and ((existing.get("emails") or {}).get("primaryEmail") or "") == person.email
+            )
+            if not same_person:
+                raise HTTPException(409, "Клиент с таким телефоном уже есть в CRM. Найдите его в списке.")
+            existing_id = existing.get("id")
+            if not isinstance(existing_id, str) or not existing_id:
+                raise HTTPException(502, "CRM вернула клиента без идентификатора.")
+            self.record_event(event)
+            return {"id": existing_id, "duplicate": True}
+        result = self.request("POST", "/rest/people", body=data)
         created = result.get("data", {}).get("createPerson")
-        if not isinstance(created, dict) or created.get("id") != str(person.client_id):
+        if not isinstance(created, dict) or not isinstance(created.get("id"), str):
             raise HTTPException(502, "Результат неизвестен. Повторите с прежним ключом клиента.")
         self.record_event(event)
         return {"id": created["id"], "duplicate": False}
