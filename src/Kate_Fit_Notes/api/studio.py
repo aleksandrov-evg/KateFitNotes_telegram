@@ -29,6 +29,9 @@ def _crm_error_message(result: dict, fallback: str = "Операция CRM не 
         for item in errors:
             if isinstance(item, dict):
                 candidates.append(item.get("message"))
+    messages = result.get("messages")
+    if isinstance(messages, list):
+        candidates.extend(messages)
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()[:500]

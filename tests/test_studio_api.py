@@ -122,6 +122,19 @@ def test_crm_validation_error_from_errors_list_is_visible(connected_app):
     assert response.json()["detail"]["message"] == "Поле id нельзя передавать при создании клиента"
 
 
+def test_crm_validation_error_from_messages_list_is_visible(connected_app):
+    browser, _studio, remote, headers = connected_app
+    remote.status_code = 400
+    remote.body = {"messages": ["Object person doesn't have any \"primaryPhoneCountryCode\" field."]}
+
+    response = browser.post("/api/v1/studio/attendance/preview", json=ATTENDANCE, headers=headers)
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["message"] == (
+        'Object person doesn\'t have any "primaryPhoneCountryCode" field.'
+    )
+
+
 def test_requires_katefit_login_and_timezone(connected_app):
     browser, _studio, remote, headers = connected_app
     assert browser.get("/api/v1/studio/auth/status").status_code == 401
