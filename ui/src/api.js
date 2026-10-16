@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(message, status) { super(message); this.status = status; }
+  constructor(message, status, details = null) { super(message); this.status = status; this.details = details; }
 }
 export class Api {
   constructor({fetcher = globalThis.fetch.bind(globalThis), storage = globalThis.sessionStorage, onUnauthorized = () => {}} = {}) {
@@ -25,7 +25,7 @@ export class Api {
       let message = typeof data?.detail === 'string' ? data.detail : data?.detail?.message || 'Не удалось выполнить запрос. Попробуйте позже.';
       if (response.status === 422 && Array.isArray(data?.detail)) message = 'Проверьте заполнение полей: сервер отклонил данные.';
       if (response.status >= 500 && !data?.detail) message = 'Сервер временно недоступен. Повторите попытку позже.';
-      throw new ApiError(message,response.status);
+      throw new ApiError(message,response.status,data?.detail);
     }
     return data;
   }

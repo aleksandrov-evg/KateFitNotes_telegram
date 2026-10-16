@@ -22,6 +22,7 @@ class FakeRecordsCrm:
         self.people = {}
         self.invalid_cursor = False
         self.timeout = False
+        self.reject_person = False
         self.audit = FakeStudioEvents()
 
     def request(self, request):
@@ -43,6 +44,8 @@ class FakeRecordsCrm:
             return httpx.Response(200, json={"data": {"person": person}}) if person else httpx.Response(404, json={"message": "Not found"})
         if request.method == "POST" and path == "/rest/people":
             body = json.loads(request.content)
+            if self.reject_person:
+                return httpx.Response(400, json={"code": "CRM_ERROR", "message": "A duplicate entry was detected"})
             body["id"] = "created-" + str(len(self.people) + 1)
             self.people[body["id"]] = body
             if self.timeout:
@@ -101,6 +104,21 @@ def test_client_without_email_does_not_send_empty_email_to_crm(records_app):
 
     assert response.status_code == 200
     assert "emails" not in remote.people[response.json()["id"]]
+
+
+def test_client_rejection_returns_exact_crm_payload(records_app):
+    browser, remote, headers = records_app
+    remote.reject_person = True
+
+    response = browser.post("/api/v1/studio/clients", json=CLIENT, headers=headers)
+
+    assert response.status_code == 400
+    payload = response.json()["detail"]["crmPayload"]
+    assert payload == {
+        "name": {"firstName": "Катя", "lastName": "Иванова"},
+        "phones": {"primaryPhoneNumber": "9210000000", "primaryPhoneCountryCode": "RU", "primaryPhoneCallingCode": "+7"},
+        "emails": {"primaryEmail": "kate@example.com"},
+    }
 
 
 @pytest.mark.parametrize("extra", [{"phone": "123"}, {"email": "bad"}, {"recordedBy": "user"}, {"apiKey": "browser-secret"}])

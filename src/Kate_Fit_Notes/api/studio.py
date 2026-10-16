@@ -198,7 +198,11 @@ class StudioCrm:
                 raise HTTPException(502, "CRM вернула клиента без идентификатора.")
             self.record_event(event)
             return {"id": existing_id, "duplicate": True}
-        result = self.request("POST", "/rest/people", body=data)
+        try:
+            result = self.request("POST", "/rest/people", body=data)
+        except HTTPException as exc:
+            details = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+            raise HTTPException(exc.status_code, {**details, "crmPayload": data}) from exc
         created = result.get("data", {}).get("createPerson")
         if not isinstance(created, dict) or not isinstance(created.get("id"), str):
             raise HTTPException(502, "Результат неизвестен. Повторите с прежним ключом клиента.")

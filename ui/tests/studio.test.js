@@ -36,10 +36,12 @@ test('ошибка дубликата клиента отображается п
   const view=studioCrmError(
     'A duplicate entry was detected: unique constraint person.IDX_UNIQUE_42 was violated',
     {firstName:'Катя',phone:'9210000000'},
+    {name:{firstName:'Катя'},phones:{primaryPhoneNumber:'9210000000'}},
   );
   assert.equal(view.title,'Клиент уже есть в CRM');
   assert.match(view.description,/проверьте журнал/i);
   assert.match(view.payload,/"firstName": "Катя"/);
+  assert.equal(view.crmPayload.phones.primaryPhoneNumber,'9210000000');
 });
 test('карточка предлагает принадлежащий клиенту пакет подходящего формата и даты',()=>{
   const session={sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T10:00:00Z'};

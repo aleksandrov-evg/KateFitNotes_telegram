@@ -34,9 +34,10 @@ function errorBox(error, target = '#page-error', context = {}) {
   if (!box) return;
   const message = error.message || String(error);
   if (target === '#page-error' && isStudio()) {
-    const view = studioCrmError(message, context.requestBody);
+    const view = studioCrmError(message, context.requestBody, error.details?.crmPayload);
     box.classList.add('crm-error');
-    box.innerHTML = `<div class="crm-error-icon" aria-hidden="true">!</div><div><strong>${e(view.title)}</strong><p>${e(view.description)}</p><details><summary>Технические детали</summary><span>Ответ CRM</span><code>${e(view.technical)}</code>${view.payload?`<span>Отправленный запрос</span><pre>${e(view.payload)}</pre>`:''}</details></div>`;
+    const crmPayload = view.crmPayload ? JSON.stringify(view.crmPayload, null, 2) : '';
+    box.innerHTML = `<div class="crm-error-icon" aria-hidden="true">!</div><div><strong>${e(view.title)}</strong><p>${e(view.description)}</p><details><summary>Технические детали</summary><span>Ответ CRM</span><code>${e(view.technical)}</code>${crmPayload?`<span>Запрос, отправленный в CRM</span><pre>${e(crmPayload)}</pre>`:''}${view.payload?`<span>${crmPayload?'Исходный запрос UI':'Отправленный запрос'}</span><pre>${e(view.payload)}</pre>`:''}</details></div>`;
   } else {
     box.classList.remove('crm-error');
     box.textContent = message;

@@ -8,7 +8,7 @@ export const studioNav = [
 export const studioPersonName = person => [person?.name?.firstName,person?.name?.lastName].filter(Boolean).join(' ') || 'Клиент без имени';
 export const relationId = (record, relation) => record?.[relation + 'Id'] || record?.[relation]?.id;
 export const currencyAmount = value => Number(value?.amountMicros || 0) / 1000000;
-export const studioCrmError = (value, requestBody) => {
+export const studioCrmError = (value, requestBody, crmPayload) => {
   const technical = String(value || 'Неизвестная ошибка CRM.');
   let payload = '';
   if (requestBody !== undefined) {
@@ -18,9 +18,10 @@ export const studioCrmError = (value, requestBody) => {
   if (/person\.id\w*_unique/i.test(technical)) {
     return {
       title: 'Клиент уже есть в CRM',
-      description: 'CRM отклонила повторное создание записи с тем же идентификатором. Обновите список клиентов и проверьте журнал операций.',
+      description: 'CRM обнаружила совпадение по одному из уникальных полей клиента. Обновите список клиентов и проверьте журнал операций.',
       technical,
       payload,
+      crmPayload,
     };
   }
   return {
@@ -28,6 +29,7 @@ export const studioCrmError = (value, requestBody) => {
     description: 'CRM отклонила запрос. Проверьте данные и повторите попытку после исправления причины.',
     technical,
     payload,
+    crmPayload,
   };
 };
 const productNameCollator = new Intl.Collator('ru', {sensitivity:'base'});
