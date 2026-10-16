@@ -1,0 +1,22 @@
+# Dokploy: отдельный stage-проект, Compose Path = ./docker-compose.ui.stage.yml
+# Domain: сервис ui, Container Port = 80. API: docker-compose.api.stage.yml.
+name: katefit-ui-stage
+
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    restart: unless-stopped
+    environment:
+      UI_API_ORIGIN: ${UI_API_ORIGIN:-http://katefit-api-stage:8000}
+    expose:
+      - "80"
+    ports:
+      - "${UI_HOST_PORT:-8081}:80"
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true

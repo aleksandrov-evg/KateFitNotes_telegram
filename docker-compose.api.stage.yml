@@ -1,0 +1,37 @@
+# Dokploy: отдельный stage-проект, Compose Path = ./docker-compose.api.stage.yml
+# Domain: сервис api, Container Port = 8000. БД stage развёртывается отдельно.
+name: katefit-api-stage
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: dockerfile.api
+    image: katefit-api-stage:latest
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Moscow
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SQL_HOST: ${SQL_HOST:?SQL_HOST is required}
+      SQL_PORT: ${SQL_PORT:-5432}
+      SQL_DATABASE: ${SQL_DATABASE:?SQL_DATABASE must name a separate stage database}
+      API_USER: ${API_USER:?API_USER is required}
+      API_PASSWORD: ${API_PASSWORD:?API_PASSWORD is required}
+      API_JWT_SECRET: ${API_JWT_SECRET:?API_JWT_SECRET is required}
+      CRM_ENABLED: ${CRM_ENABLED:-0}
+      CRM_BASE_URL: ${CRM_BASE_URL:-}
+      CRM_API_KEY: ${CRM_API_KEY:-}
+    expose:
+      - "8000"
+    ports:
+      - "${API_HOST_PORT:-8001}:8000"
+    networks:
+      dokploy-network:
+        # Имя для других compose-проектов в общей внешней сети.
+        aliases:
+          - katefit-api-stage
+
+networks:
+  dokploy-network:
+    external: true

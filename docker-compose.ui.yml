@@ -17,7 +17,7 @@ services:
     expose:
       - "80"
     ports:
-      - "8080:80"
+      - "${UI_HOST_PORT:-8080}:80"
     networks:
       - dokploy-network
 
