@@ -1,4 +1,5 @@
-import {escapeHtml as e, money} from './domain.js';
+import {bindPhoneInput} from './phone-input.js';
+import {escapeHtml as e, money, normalizePhone} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
 import {setStudioSelectClients} from './studio-select.js';
 import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate, paymentStartOfMoscowDay} from './studio-domain.js';
@@ -63,7 +64,7 @@ export class StudioUi {
       <section class="panel"><h2>Новый клиент</h2><form id="studio-client-form">
       ${field('Имя','<input name="firstName" maxlength="100" required autocomplete="given-name">')}
       ${field('Фамилия','<input name="lastName" maxlength="100" autocomplete="family-name">')}
-      ${field('Телефон','<input name="phone" type="tel" required placeholder="+7 921 000-00-00" autocomplete="tel">')}
+      ${field('Телефон','<input name="phone" type="tel" required value="+7" placeholder="+7 (921) 000-00-00" inputmode="tel" autocomplete="tel">')}
       ${field('Email','<input name="email" type="email" maxlength="254" autocomplete="email">')}
       <div id="studio-form-error" class="error" role="alert" hidden></div><button class="primary" type="submit">Добавить клиента</button></form></section></div>`);
     const draw=query=>{
@@ -73,11 +74,13 @@ export class StudioUi {
     };
     draw('');document.querySelector('#studio-search').oninput=event=>draw(event.target.value.trim());
     const form=document.querySelector('#studio-client-form');
+    bindPhoneInput(form.elements.phone);
     this.restore('client',form,'/studio/clients');
     form.onsubmit=event=>{
       event.preventDefault();
       try {
         const body={...Object.fromEntries(new FormData(form)),clientId:createOperationId()};
+        body.phone=normalizePhone(body.phone);
         this.submit('client',body,'/studio/clients');
       } catch(error) { this.errorBox(error,'#studio-form-error'); }
     };
