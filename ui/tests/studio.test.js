@@ -33,7 +33,7 @@ test('оплата пакета начинается в 00:00 по Москве 
   assert.equal(paymentStartOfMoscowDay('not-a-date'),null);
 });
 test('ошибка дубликата клиента отображается понятным текстом',()=>{
-  const view=studioCrmError('A duplicate entry was detected: unique constraint person.ID_UNIQUE_42 was violated');
+  const view=studioCrmError('A duplicate entry was detected: unique constraint person.IDX_UNIQUE_42 was violated');
   assert.equal(view.title,'Клиент уже есть в CRM');
   assert.match(view.description,/проверьте журнал/i);
 });

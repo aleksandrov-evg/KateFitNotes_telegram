@@ -10,7 +10,7 @@ export const relationId = (record, relation) => record?.[relation + 'Id'] || rec
 export const currencyAmount = value => Number(value?.amountMicros || 0) / 1000000;
 export const studioCrmError = value => {
   const technical = String(value || 'Неизвестная ошибка CRM.');
-  if (/person\.id_unique/i.test(technical)) {
+  if (/person\.id\w*_unique/i.test(technical)) {
     return {
       title: 'Клиент уже есть в CRM',
       description: 'CRM отклонила повторное создание записи с тем же идентификатором. Обновите список клиентов и проверьте журнал операций.',
