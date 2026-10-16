@@ -91,6 +91,14 @@ function wireBookingDetails() {
   document.querySelectorAll('[data-booking]').forEach(button=>button.onclick=()=>{
     const b=state.bookings.find(b=>b.id===Number(button.dataset.booking));if(!b)return;
     showDialog('Запись на тренировку',`<dl><dt>Когда</dt><dd>${e(formatDate(b.date))} · ${e(b.time.slice(0,5))}</dd><dt>Тип</dt><dd>${e(typeName(b.type_train_id))}</dd><dt>Участники</dt><dd>${e((b.participants?.length?b.participants:[b.client]).map(name).join(', '))}</dd><dt>Оплата</dt><dd>${e(money(b.price))}${b.accounting_id?' · по пакету':''}</dd><dt>Аренда</dt><dd>${e(money(b.rent_debt))}</dd></dl>`);
+    dialog.querySelector('.dialog-actions').insertAdjacentHTML('afterbegin','<button id="delete-booking" class="danger" type="button">Удалить тренировку</button>');
+    dialog.querySelector('#delete-booking').onclick=()=>{
+      showDialog('Удалить тренировку?',`<p>${e(formatDate(b.date))} · ${e(b.time.slice(0,5))} · ${e(typeName(b.type_train_id))}</p><p class="deletion-note">${b.is_group?'Будет удалена вся групповая тренировка со всеми участниками.':'Запись будет удалена из расписания.'} ${b.accounting_id?'Посещение вернётся в остаток связанного пакета. Возврата денег эта операция не делает.':'Денежный возврат эта операция не выполняет.'} Отменить удаление нельзя.</p>`,async()=>{
+        await api.request('/bookings/'+b.id,{method:'DELETE'});
+        await load();notify('Тренировка удалена. Данные обновлены.');
+      });
+      const confirm=dialog.querySelector('#dialog-submit');confirm.textContent='Удалить тренировку';confirm.className='danger';
+    };
   });
 }
 function renderOverview() {

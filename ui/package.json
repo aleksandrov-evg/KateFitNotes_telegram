@@ -10,6 +10,7 @@
     "test:browser:http": "node scripts/smoke_http_payment.mjs",
     "test:browser:calendar": "node scripts/smoke_calendar.mjs",
     "test:browser:sessions": "node scripts/smoke_session_creation.mjs",
-    "test:browser:design": "node scripts/smoke_studio_design.mjs"
+    "test:browser:design": "node scripts/smoke_studio_design.mjs",
+    "test:browser:delete": "node scripts/smoke_booking_delete.mjs"
   }
 }

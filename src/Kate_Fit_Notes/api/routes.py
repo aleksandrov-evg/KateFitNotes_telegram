@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from src.Kate_Fit_Notes.api.auth import require_user
 from src.Kate_Fit_Notes.api.deps import (
@@ -163,6 +163,14 @@ def book_group(
         price=body.price,
     )
     return booking_out(booked)
+
+
+@router.delete("/bookings/{booking_id}")
+def delete_booking(
+    booking_id: int = Path(gt=0),
+    service: BookingService = Depends(get_booking_service),
+) -> dict[str, bool]:
+    return {"deleted": service.delete_booking(booking_id)}
 
 
 @router.get("/prepaid", response_model=PrepaidPage)
