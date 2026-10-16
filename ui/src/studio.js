@@ -217,7 +217,7 @@ export class StudioUi {
       this.notify(result.duplicate?'Операция уже сохранена в CRM. Повторного списания нет.':'Сохранено в CRM.');
       if(generation===this.generation)await this.render(route,true);
     } catch(error) {
-      if(error.status===422)this.pending.clear(kind);
+      if(error.status>=400&&error.status<500)this.pending.clear(kind);
       if(generation===this.generation){await this.render(route);this.errorBox(error);}
       if(propagate)throw error;
     } finally {this.saving=false;}

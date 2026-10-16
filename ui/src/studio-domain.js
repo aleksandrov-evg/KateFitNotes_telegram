@@ -8,6 +8,21 @@ export const studioNav = [
 export const studioPersonName = person => [person?.name?.firstName,person?.name?.lastName].filter(Boolean).join(' ') || 'Клиент без имени';
 export const relationId = (record, relation) => record?.[relation + 'Id'] || record?.[relation]?.id;
 export const currencyAmount = value => Number(value?.amountMicros || 0) / 1000000;
+export const studioCrmError = value => {
+  const technical = String(value || 'Неизвестная ошибка CRM.');
+  if (/person\.id_unique/i.test(technical)) {
+    return {
+      title: 'Клиент уже есть в CRM',
+      description: 'CRM отклонила повторное создание записи с тем же идентификатором. Обновите список клиентов и проверьте журнал операций.',
+      technical,
+    };
+  }
+  return {
+    title: 'CRM не выполнила операцию',
+    description: 'CRM отклонила запрос. Проверьте данные и повторите попытку после исправления причины.',
+    technical,
+  };
+};
 const productNameCollator = new Intl.Collator('ru', {sensitivity:'base'});
 export const eligibleProducts = products => products
   .filter(product => product.isActive && ['GROUP_PACKAGE','PERSONAL'].includes(product.category))

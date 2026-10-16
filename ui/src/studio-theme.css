@@ -115,6 +115,13 @@
 .studio-mode .calendar-dialog .calendar-participant { font-size: 13px; }
 .studio-mode .calendar-dialog input[type=checkbox] { accent-color: #b85160; }
 .studio-mode .error { color: #a0353a; background: #fff0f0; border-radius: 10px; }
+.studio-mode .crm-error { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 12px; align-items: start; padding: 16px 18px; border: 1px solid #edc1c8; }
+.studio-mode .crm-error-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #c55061; color: #fff; font-size: 16px; font-weight: 700; line-height: 1; }
+.studio-mode .crm-error strong { display: block; color: #923744; font-size: 13px; }
+.studio-mode .crm-error p { margin: 4px 0 0; color: #75565f; font-size: 12px; line-height: 1.55; }
+.studio-mode .crm-error details { margin-top: 10px; color: #8b5660; font-size: 11px; }
+.studio-mode .crm-error summary { cursor: pointer; width: fit-content; }
+.studio-mode .crm-error code { display: block; max-width: 100%; margin-top: 7px; overflow-wrap: anywhere; color: #6e4650; }
 .studio-select { position: relative; width: 100%; min-width: 0; }
 .studio-select > select[hidden] { display: none; }
 .studio-select > [role=combobox] { display: flex; width: 100%; min-height: 46px; margin: 0 !important; justify-content: space-between; text-align: left; font-size: 13px; font-weight: 400; border: 1px solid #eadce1; border-radius: 8px; background: #fff; padding: 11px 12px; color: #3b292e; }

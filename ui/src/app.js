@@ -1,7 +1,7 @@
 import {Api} from './api.js';
 import './studio-select.js';
 import {StudioUi} from './studio.js';
-import {studioNav} from './studio-domain.js';
+import {studioNav, studioCrmError} from './studio-domain.js';
 import {escapeHtml as e, today, addDays, weekStart, weekDays, formatDate, money, clientName, phoneLabel, normalizePhone, integer, activePackages, priceHint, slots, bookingPayload} from './domain.js';
 
 const root = document.querySelector('#app');
@@ -31,7 +31,18 @@ function notify(message) {
 }
 function errorBox(error, target = '#page-error') {
   const box = document.querySelector(target);
-  if (box) { box.textContent = error.message || String(error); box.hidden = false; box.scrollIntoView({block:'nearest'}); }
+  if (!box) return;
+  const message = error.message || String(error);
+  if (target === '#page-error' && isStudio()) {
+    const view = studioCrmError(message);
+    box.classList.add('crm-error');
+    box.innerHTML = `<div class="crm-error-icon" aria-hidden="true">!</div><div><strong>${e(view.title)}</strong><p>${e(view.description)}</p><details><summary>Технические детали</summary><code>${e(view.technical)}</code></details></div>`;
+  } else {
+    box.classList.remove('crm-error');
+    box.textContent = message;
+  }
+  box.hidden = false;
+  box.scrollIntoView({block:'nearest'});
 }
 function logout(message = '') {
   generation++; slotGeneration++; api.setToken(''); state.ready=false; terfitLoaded=false; studio.reset();
