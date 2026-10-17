@@ -11,8 +11,8 @@ from pathlib import Path
 DEFAULT_INI_PATH = Path("config.ini")
 
 ENV_TOKEN = "TG_TOKEN"
-ENV_SQL_USER = "TG_ACCOUNT"
-ENV_SQL_PASSWORD = "TG_PASS"
+ENV_SQL_USER = "DB_USER"
+ENV_SQL_PASSWORD = "DB_PASSWORD"
 ENV_SQL_DATABASE = "SQL_DATABASE"
 ENV_SQL_HOST = "SQL_HOST"
 ENV_SQL_PORT = "SQL_PORT"
@@ -38,6 +38,20 @@ class Settings:
     api_user: str | None = None
     api_password: str | None = None
     api_jwt_secret: str | None = None
+
+
+@dataclass(frozen=True)
+class ApiSettings:
+    """Конфигурация самостоятельного HTTP API без Telegram-секретов."""
+
+    sql_user: str
+    sql_password: str
+    sql_database: str
+    sql_host: str
+    sql_port: int
+    api_user: str
+    api_password: str
+    api_jwt_secret: str
 
 
 def _env_value(env: Mapping[str, str], key: str) -> str | None:
@@ -141,9 +155,9 @@ def load_settings(
     if not token:
         missing.append("TG_TOKEN / [main] TOKEN")
     if not sql_user:
-        missing.append("TG_ACCOUNT / [sql] user")
+        missing.append("DB_USER / [sql] user")
     if not sql_password:
-        missing.append("TG_PASS / [sql] password")
+        missing.append("DB_PASSWORD / [sql] password")
     if not sql_database:
         missing.append("SQL_DATABASE / [sql] database")
     if not sql_host:
@@ -173,6 +187,63 @@ def load_settings(
         sql_host=sql_host,
         sql_port=sql_port,
         allowed_chat_ids=parse_allowed_chat_ids(allowed_raw),
+        api_user=api_user,
+        api_password=api_password,
+        api_jwt_secret=api_jwt_secret,
+    )
+
+
+def load_api_settings(
+    environ: Mapping[str, str] | None = None,
+    ini_path: str | Path | None = None,
+) -> ApiSettings:
+    """Загружает настройки API, не требуя ``TG_TOKEN``.
+
+    Реквизиты PostgreSQL по-прежнему могут быть взяты из локального config.ini,
+    а учётные данные HTTP API намеренно доступны только через env.
+    """
+    env = os.environ if environ is None else environ
+    path = DEFAULT_INI_PATH if ini_path is None else Path(ini_path)
+    parser = _read_ini(path)
+
+    sql_user = _pick(_env_value(env, ENV_SQL_USER), _ini_value(parser, "sql", "user"))
+    sql_password = _pick(
+        _env_value(env, ENV_SQL_PASSWORD), _ini_value(parser, "sql", "password")
+    )
+    sql_database = _pick(
+        _env_value(env, ENV_SQL_DATABASE), _ini_value(parser, "sql", "database")
+    )
+    sql_host = _pick(_env_value(env, ENV_SQL_HOST), _ini_value(parser, "sql", "host"))
+    sql_port_raw = _pick(_env_value(env, ENV_SQL_PORT), _ini_value(parser, "sql", "port"))
+    api_user = _env_value(env, ENV_API_USER)
+    api_password = _env_value(env, ENV_API_PASSWORD)
+    api_jwt_secret = _env_value(env, ENV_API_JWT_SECRET)
+
+    required = {
+        "DB_USER / [sql] user": sql_user,
+        "DB_PASSWORD / [sql] password": sql_password,
+        "SQL_DATABASE / [sql] database": sql_database,
+        "SQL_HOST / [sql] host": sql_host,
+        "SQL_PORT / [sql] port": sql_port_raw,
+        "API_USER": api_user,
+        "API_PASSWORD": api_password,
+        "API_JWT_SECRET": api_jwt_secret,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise ConfigError("Нет обязательных полей конфига: " + ", ".join(missing))
+
+    try:
+        sql_port = int(sql_port_raw)
+    except ValueError as exc:
+        raise ConfigError(f"SQL_PORT должен быть целым числом, не {sql_port_raw!r}") from exc
+
+    return ApiSettings(
+        sql_user=sql_user,
+        sql_password=sql_password,
+        sql_database=sql_database,
+        sql_host=sql_host,
+        sql_port=sql_port,
         api_user=api_user,
         api_password=api_password,
         api_jwt_secret=api_jwt_secret,

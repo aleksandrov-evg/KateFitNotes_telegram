@@ -1,0 +1,39 @@
+# Деплой Telegram-бота (локально и Dokploy).
+#
+# Dokploy:
+#   Compose Type = Docker Compose
+#   Compose Path = ./docker-compose.bot.yml
+#   Env: TG_* / SQL_* (см. .env.example)
+# HTTP API развёртывается независимо через docker-compose.api.yml.
+#
+# БД деплоится отдельно. Укажите SQL_HOST / SQL_PORT / SQL_DATABASE
+# на reachable-хост Postgres (IP, hostname сервиса в общей сети и т.п.).
+#
+# Локально без Dokploy нужна сеть Traefik-совместимости:
+#   docker network create dokploy-network
+#
+# Затем:
+#   docker compose -f docker-compose.bot.yml up -d --build
+
+services:
+  tg_bot:
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: telegram_bot:latest
+    restart: always
+    environment:
+      TZ: Europe/Moscow
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      TG_TOKEN: ${TG_TOKEN}
+      TG_ALLOWED_CHAT_IDS: ${TG_ALLOWED_CHAT_IDS}
+      SQL_HOST: ${SQL_HOST:?SQL_HOST is required}
+      SQL_PORT: ${SQL_PORT:-5432}
+      SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true

@@ -1,0 +1,10 @@
+body{padding-top:64px}
+.stage-banner{display:flex;position:fixed;top:0;left:0;right:0;height:64px;z-index:1000;align-items:center;justify-content:center;gap:16px;padding:8px 16px;background:#fff0b3;color:#563600;border-bottom:2px solid #d99b00;text-align:center;font-size:14px;line-height:1.4}
+.sidebar{top:64px;height:calc(100dvh - 64px)}
+.app-shell,.login{min-height:calc(100dvh - 64px)}
+@media(max-width:640px){
+  .stage-banner{flex-direction:column;gap:2px;font-size:12px}
+  .mobile-header{top:64px}
+  .menu-open .sidebar,.studio-shell.menu-open .sidebar{top:130px;height:calc(100dvh - 130px)}
+  .login-area{min-height:calc(100dvh - 64px)}
+}

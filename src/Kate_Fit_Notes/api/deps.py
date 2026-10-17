@@ -8,10 +8,10 @@ from src.Kate_Fit_Notes.services.booking import BookingService
 from src.Kate_Fit_Notes.services.clients import ClientService
 from src.Kate_Fit_Notes.services.prepaid import PrepaidService
 from src.Kate_Fit_Notes.services.report import ReportService
-from src.Kate_Fit_Notes.settings import Settings
+from src.Kate_Fit_Notes.settings import ApiSettings, Settings
 
 
-def get_settings(request: Request) -> Settings:
+def get_settings(request: Request) -> Settings | ApiSettings:
     return request.app.state.settings
 
 

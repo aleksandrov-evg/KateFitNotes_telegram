@@ -1,0 +1,44 @@
+# Самостоятельный деплой HTTP API (локально и Dokploy).
+#
+# Dokploy:
+#   Compose Type = Docker Compose
+#   Compose Path = ./docker-compose.api.yml
+#   Domain вешать на сервис api, порт 8000.
+#   Env: DB_USER / DB_PASSWORD / SQL_* / API_* (см. .env.example).
+# TG_TOKEN и TG_ALLOWED_CHAT_IDS этому сервису не нужны.
+#
+# БД деплоится отдельно. SQL_HOST должен быть reachable из контейнера API.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: dockerfile.api
+    image: ${API_IMAGE:-katefit-api:latest}
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Moscow
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      SQL_HOST: ${SQL_HOST:?SQL_HOST is required}
+      SQL_PORT: ${SQL_PORT:-5432}
+      SQL_DATABASE: ${SQL_DATABASE:-Kate_fitness}
+      API_USER: ${API_USER:?API_USER is required}
+      API_PASSWORD: ${API_PASSWORD:?API_PASSWORD is required}
+      API_JWT_SECRET: ${API_JWT_SECRET:?API_JWT_SECRET is required}
+      CRM_ENABLED: ${CRM_ENABLED:-0}
+      CRM_BASE_URL: ${CRM_BASE_URL:-}
+      CRM_API_KEY: ${CRM_API_KEY:-}
+    expose:
+      - "8000"
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    networks:
+      dokploy-network:
+        # Имя для других compose-проектов в общей внешней сети.
+        aliases:
+          - ${API_NETWORK_ALIAS:-katefit-api}
+
+networks:
+  dokploy-network:
+    external: true

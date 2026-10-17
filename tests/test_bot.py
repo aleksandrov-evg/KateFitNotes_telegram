@@ -17,6 +17,7 @@ from src.Kate_Fit_Notes.bot_ui import (
     MENU_ADD_PAYMENT,
     MENU_PERSONAL,
     MENU_REPORT,
+    MENU_SCHEDULE,
     client_list_markup,
     slots_markup,
     train_types_markup,
@@ -150,12 +151,71 @@ def test_add_payment_button_starts_prepaid_process():
     assert repo.select_last_client_calls == [0]
 
 
+def test_prepaid_date_is_selected_before_confirmation():
+    app = make_app()
+    state = app.sessions.clear(CHAT_A, "add_money_in_accounting")
+    state.operation = "choose_prepaid_date"
+    state.client = dict(CLIENT)
+    state.train = dict(TRAIN)
+    state.summ = 10_000
+    state.count_train = 10
+
+    app.callback_inline(make_call(CHAT_A, SESSION_DATE.isoformat()))
+
+    assert state.prepaid_date == SESSION_DATE
+    assert state.operation == "confirm_add_accounting"
+
+
+def test_confirmed_prepaid_passes_selected_payment_date():
+    app = make_app()
+    app.prepaid_service.add_package = MagicMock()
+    state = app.sessions.clear(CHAT_A, "add_money_in_accounting")
+    state.operation = "confirm_add_accounting"
+    state.client = dict(CLIENT)
+    state.train = dict(TRAIN)
+    state.summ = 10_000
+    state.count_train = 10
+    state.prepaid_date = SESSION_DATE
+
+    app.callback_inline(make_call(CHAT_A, "approve_add"))
+
+    app.prepaid_service.add_package.assert_called_once_with(
+        client_id=42,
+        type_train_id=1,
+        summ=10_000,
+        count=10,
+        paid_date=SESSION_DATE,
+    )
+
+
 def test_report_button_calls_monthly_report():
     repo = FakeBotRepo()
     app = make_app(repo)
     app.report_service.monthly_report = MagicMock(return_value=[])
     app.get_text_messages(make_message(CHAT_A, MENU_REPORT))
     app.report_service.monthly_report.assert_called_once_with()
+
+
+def test_schedule_shows_bookings_and_deletes_selected_booking():
+    app = make_app()
+    booking = {
+        "id": 91,
+        "date": SESSION_DATE,
+        "time": SESSION_TIME,
+        "type_train": "силовая 1 чел",
+    }
+    app.booking_service.list_bookings = MagicMock(return_value={"items": [booking]})
+    app.booking_service.delete_booking = MagicMock(return_value=True)
+
+    app.get_text_messages(make_message(CHAT_A, MENU_SCHEDULE))
+    app.callback_inline(make_call(CHAT_A, "show_schedule_today"))
+    assert app.sessions.get(CHAT_A).operation == "choose_booking"
+    app.callback_inline(make_call(CHAT_A, "91"))
+    assert app.sessions.get(CHAT_A).operation == "confirm_delete_booking"
+    app.callback_inline(make_call(CHAT_A, "approve_delete_booking"))
+
+    app.booking_service.delete_booking.assert_called_once_with(91)
+    assert app.sessions.get(CHAT_A).process is None
 
 
 def test_approve_add_calls_book_personal_with_state_ids():

@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.Kate_Fit_Notes.api.deps import get_settings
 from src.Kate_Fit_Notes.api.schemas import LoginRequest, TokenResponse
-from src.Kate_Fit_Notes.settings import Settings
+from src.Kate_Fit_Notes.settings import ApiSettings, Settings
 
 JWT_ALGORITHM = "HS256"
 TOKEN_TTL = timedelta(hours=24)
@@ -46,7 +46,9 @@ def decode_access_token(token: str, secret: str) -> str:
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(body: LoginRequest, settings: Settings = Depends(get_settings)) -> TokenResponse:
+def login(
+    body: LoginRequest, settings: Settings | ApiSettings = Depends(get_settings)
+) -> TokenResponse:
     user_ok = hmac.compare_digest(body.username, settings.api_user or "")
     password_ok = hmac.compare_digest(body.password, settings.api_password or "")
     if not (user_ok and password_ok):
@@ -60,7 +62,7 @@ def login(body: LoginRequest, settings: Settings = Depends(get_settings)) -> Tok
 
 def require_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    settings: Settings = Depends(get_settings),
+    settings: Settings | ApiSettings = Depends(get_settings),
 ) -> str:
     if credentials is None or not credentials.credentials:
         raise HTTPException(

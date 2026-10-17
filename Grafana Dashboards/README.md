@@ -6,6 +6,8 @@
 
 - `overview.json` — финансы и расписание;
 - `prepaid-packages.json` — отдельная аналитика по пакетам предоплаты.
+- `monthly-financial-summary.json` — помесячная выручка, аренда и валовая прибыль.
+- `training-load-heatmap.json` — распределение тренировок по дням недели и часам.
 
 Оба JSON используют заданный UID PostgreSQL datasource `bfxxeavvzooaoc`.
 В них нет адреса БД, пользователя, пароля и других секретов.

@@ -109,6 +109,7 @@ class FakeBookingRepo:
                 "accounting_id": accounting_id,
             }
         )
+        return schedule_id
 
     def get_schedule_at(self, date, time):
         for row in reversed(self.schedule_rows):
@@ -121,6 +122,14 @@ class FakeBookingRepo:
             if row["id"] == schedule_id:
                 return list(row.get("participant_ids") or [])
         return []
+
+    def delete_booking(self, schedule_id):
+        for index, row in enumerate(self.schedule_rows):
+            if row["id"] == schedule_id:
+                self.schedule_rows.pop(index)
+                self.occupied[row["date"]].remove(row["time"])
+                return True
+        return False
 
     def get_active_prepaid_for_client(self, client_id, type_train_id):
         return list(self.prepaid)
@@ -172,6 +181,13 @@ class TestBookPersonalUnit:
                 43, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1200
             )
         assert len(fake.insert_calls) == 1
+
+    def test_delete_booking_releases_slot(self):
+        fake = FakeBookingRepo()
+        service = BookingService(fake)
+        created = service.book_personal(42, PERSONAL_TRAIN_ID, SESSION_DATE, SESSION_TIME, price=1000)
+        assert service.delete_booking(created["id"]) is True
+        assert SESSION_TIME in service.list_available_slots(SESSION_DATE)
 
     def test_unique_violation_mapped_to_slot_taken(self):
         fake = FakeBookingRepo()

@@ -34,7 +34,8 @@ tests/                          # автотесты (pytest), не корнев
 alembic/                        # миграции схемы main.* as-is
 backups/kate_fitness_schema.sql # DDL Kate_fitness без данных (кластерный дамп в gitignore)
 dockerfile                      # образ бота
-docker-compose.yml              # pg_db :5432, pg_db_test :5433, pgadmin :5050, tg_bot, api :8000
+docker-compose.db.yml           # деплой БД: pg_db :5432, pg_db_test :5433, pgadmin :5050
+docker-compose.bot.yml          # деплой приложения (Dokploy): tg_bot, api expose :8000
 config.ini                      # не в git: TOKEN и параметры SQL
 pyproject.toml                  # runtime и dev-зависимости
 uv.lock                         # зафиксированные версии
@@ -77,15 +78,15 @@ port=5432
 | `API_USER` | логин HTTP API (JWT) | — |
 | `API_PASSWORD` | пароль HTTP API | — |
 | `API_JWT_SECRET` | секрет подписи JWT | — |
-| `TG_ACCOUNT` | пользователь PostgreSQL (`POSTGRES_USER`) | `[sql] user` |
-| `TG_PASS` | пароль PostgreSQL и pgAdmin | `[sql] password` |
+| `DB_USER` | пользователь PostgreSQL (`POSTGRES_USER`) | `[sql] user` |
+| `DB_PASSWORD` | пароль PostgreSQL и pgAdmin | `[sql] password` |
 | `TG_EMAIL` | логин pgAdmin (`PGADMIN_DEFAULT_EMAIL`) | — |
 | `SQL_DATABASE` | имя БД бота | `[sql] database` |
 | `SQL_HOST` | хост БД бота | `[sql] host` |
 | `SQL_PORT` | порт БД бота | `[sql] port` |
 | `DATABASE_URL` | URL тестовой БД для pytest / Alembic (порт 5433, имя `*_test`) | — |
 
-В compose у `tg_bot` и `api` задаются `SQL_HOST=db_pg`, `SQL_PORT=5432`, `SQL_DATABASE=Kate_fitness`. Postgres: `POSTGRES_DB=Kate_fitness` (прод) и `Kate_fitness_test` (тест), healthcheck `pg_isready`, бот и API ждут `service_healthy`. API слушает `:8000`. Пустой `TG_ALLOWED_CHAT_IDS` — бот никому не отвечает.
+Compose разделён: `docker-compose.db.yml` (БД/pgAdmin) и `docker-compose.bot.yml` (бот/API, Dokploy-ready). Бот подключается к отдельно задеплоенной БД по `SQL_HOST`/`SQL_PORT`/`SQL_DATABASE` (обязательный `SQL_HOST`, порт по умолчанию `5432`, БД `Kate_fitness`). Сеть бота: только `dokploy-network` (`external`). Без `container_name`; API только `expose: 8000`. Postgres в db-compose: `POSTGRES_DB=Kate_fitness` (прод) и `Kate_fitness_test` (тест), healthcheck `pg_isready`, сеть `katefitnotes_postgres` только у БД. Пустой `TG_ALLOWED_CHAT_IDS` — бот никому не отвечает.
 
 Тестовая БД: контейнер `pg_db_test`, порт хоста `5433`, имя `Kate_fitness_test` (`DATABASE_URL`). Pytest отказывается подключаться к `Kate_fitness` и к порту `5432`. Pytest **не** подхватывает `.env` сам — `DATABASE_URL` нужно экспортировать.
 
@@ -171,7 +172,7 @@ port=5432
 
 ## Как запускать
 
-Локально (env `TG_TOKEN` / `TG_ACCOUNT` / `TG_PASS` / `SQL_*` или fallback `config.ini`):
+Локально (env `TG_TOKEN` / `DB_USER` / `DB_PASSWORD` / `SQL_*` или fallback `config.ini`):
 
 ```bash
 uv sync
@@ -183,11 +184,9 @@ uv run uvicorn src.Kate_Fit_Notes.api.app:app_from_env --factory --host 127.0.0.
 Инфраструктура:
 
 ```bash
-docker compose up -d db_pg pgadmin
-docker compose build tg_bot
-# или: docker build -t telegram_bot:latest .
-docker compose up -d tg_bot
-docker compose up -d api
+docker compose -f docker-compose.db.yml up -d db_pg pgadmin
+docker network create dokploy-network 2>/dev/null || true
+docker compose -f docker-compose.bot.yml up -d --build
 ```
 
 pgAdmin: `http://localhost:5050`. Postgres: `localhost:5432` (прод-данные), `localhost:5433` (тест).
@@ -196,7 +195,7 @@ pgAdmin: `http://localhost:5050`. Postgres: `localhost:5432` (прод-данн�
 
 ```bash
 uv sync
-docker compose up -d db_pg_test
+docker compose -f docker-compose.db.yml up -d db_pg_test
 # DATABASE_URL как в .env.example
 uv run pytest tests/
 ```
@@ -223,6 +222,12 @@ uv run pytest tests/
 - Не писать новые фичи в `main.py` или пустой `pipelines.py`.
 - Не запускать `git push` и не менять git config без просьбы.
 - Не коммитить изменения `.idea/`, если пользователь не просил.
+
+## CRM bridge (katfit-personal)
+
+HTTP API — SoT-доступ для зеркала Twenty `katfit-personal` (отдельный workspace).
+Контракт sync: `GET /api/v1/bookings`, `GET /api/v1/prepaid`, `location` в train-types.
+Инвентаризация: `docs/crm-migration-inventory.md`. Документ моста: в CRM app `docs/pt-crm-bridge.md`.
 
 ## Типичные точки расширения
 

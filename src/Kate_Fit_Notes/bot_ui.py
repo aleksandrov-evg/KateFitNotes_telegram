@@ -15,6 +15,7 @@ MENU_ADD_PAYMENT = "Добавить оплату"
 MENU_REPORT = "💰 Отчет по тренировкам"
 MENU_PERSONAL = "➕🤸‍ Добавить перс. тренировку"
 MENU_GROUP = "➕👯 Добавить груп. тренировку"
+MENU_SCHEDULE = "📓 Расписание тренировок"
 GREETING = "Привет, Катюнь! Что будем делать?"
 ACCESS_DENIED = "Нет доступа"
 
@@ -27,6 +28,7 @@ def main_menu_markup() -> types.ReplyKeyboardMarkup:
         MENU_REPORT,
         MENU_PERSONAL,
         MENU_GROUP,
+        MENU_SCHEDULE,
     )
     markup.add(BACK_TO_MENU)
     return markup
@@ -125,6 +127,39 @@ def schedule_menu_markup() -> types.InlineKeyboardMarkup:
     return markup
 
 
+def booking_list_markup(bookings: list[dict]) -> types.InlineKeyboardMarkup:
+    """Кнопки записей дня. callback_data содержит id записи, не индекс списка."""
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        *[
+            types.InlineKeyboardButton(
+                f"{booking['time']:%H:%M} — {booking.get('type_train') or 'Тренировка'}",
+                callback_data=str(booking["id"]),
+            )
+            for booking in bookings
+        ]
+    )
+    return markup
+
+
+def delete_booking_markup() -> types.InlineKeyboardMarkup:
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("🗑 Удалить", callback_data="approve_delete_booking"),
+        types.InlineKeyboardButton("❌ Отменить", callback_data="cancel_delete_booking"),
+    )
+    return markup
+
+
+def booking_delete_confirm_text(booking: dict) -> str:
+    return (
+        "Удалить тренировку?\n"
+        f"Дата: *{booking['date']}*\n"
+        f"Время: *{booking['time']:%H:%M}*\n"
+        f"Тип: *{booking.get('type_train') or '—'}*"
+    )
+
+
 def report_text(rows: list[dict] | None) -> str:
     if not rows:
         return (
@@ -172,7 +207,9 @@ def booking_confirm_text(
     )
 
 
-def prepaid_confirm_text(client: dict, train: dict, summ: int, count: int) -> str:
+def prepaid_confirm_text(
+    client: dict, train: dict, summ: int, count: int, paid_date: Any = None
+) -> str:
     return (
         "Добавление предоплаты\n"
         f"Клиент: {client['name']} {client['surname']}\n"
@@ -180,4 +217,5 @@ def prepaid_confirm_text(client: dict, train: dict, summ: int, count: int) -> st
         f"Общая сумма: {summ}\n"
         f"Количество тренировок: {count}\n"
         f"Стоимость 1 тренировки: {price_per_train(summ, count)}\n"
+        f"Дата оплаты: {paid_date}\n"
     )

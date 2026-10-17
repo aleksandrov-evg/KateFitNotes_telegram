@@ -33,10 +33,10 @@ class FakePrepaidRepo:
         return list(self.usage)
 
     def insert_in_accounting(
-        self, client_id, summ, count_train, price_per_train, type_train_id
+        self, client_id, summ, count_train, price_per_train, type_train_id, paid_date=None
     ):
         self.insert_calls.append(
-            (client_id, summ, count_train, price_per_train, type_train_id)
+            (client_id, summ, count_train, price_per_train, type_train_id, paid_date)
         )
         self.active.append(
             {
@@ -85,6 +85,16 @@ class TestAddPackageUnit:
             PrepaidService(fake).add_package(42, PERSONAL_TRAIN_ID, 1000, 0)
         assert fake.insert_calls == []
         assert fake.active == []
+
+    def test_paid_date_is_forwarded_to_repository(self):
+        fake = FakePrepaidRepo()
+        paid_date = date(2026, 8, 20)
+
+        PrepaidService(fake).add_package(
+            42, PERSONAL_TRAIN_ID, 1000, 10, paid_date=paid_date
+        )
+
+        assert fake.insert_calls[0][-1] == paid_date
 
     def test_second_package_refused(self):
         fake = FakePrepaidRepo()

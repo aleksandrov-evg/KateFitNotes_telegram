@@ -5,6 +5,7 @@
 /Архив_данных_17.04.rar
 /backups/cluster_*.sql
 /.env
+/.env.stage
 .idea/
 .venv/
 __pycache__/
