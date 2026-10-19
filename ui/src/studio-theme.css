@@ -70,6 +70,8 @@
 .studio-shell th { background: #fcf7f8; color: #7a6269; font-size: 11px; font-weight: 500; padding: 14px 16px; white-space: nowrap; }
 .studio-shell td { padding: 18px 16px; border-color: #f3e8ec; line-height: 1.6; vertical-align: middle; }
 .studio-shell tbody tr:hover { background: #fff9fb; }
+.studio-shell .studio-client-row { cursor: pointer; }
+.studio-shell .studio-client-row:focus-visible { position: relative; z-index: 1; outline: 2px solid #00a991; outline-offset: -2px; }
 .studio-shell .text-button { background: transparent; border: 0; padding: 0; min-height: 24px; text-align: left; color: #b85160; justify-content: start; }
 .studio-shell .text-button:hover { text-decoration: underline; }
 .studio-shell .studio-subline { font-size: 11px; color: #7a6269; margin-top: 4px; }
@@ -142,6 +144,25 @@
 .studio-mode dialog > #dialog-title { flex-shrink: 0; margin: 0; padding: 20px 24px; }
 .studio-mode .studio-dialog-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 24px 20px; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #d5b9c2 transparent; }
 .studio-mode dialog > .dialog-actions { flex-shrink: 0; padding: 16px 24px; margin: 0 16px; }
+.studio-mode .client-details { grid-template-columns: minmax(76px, auto) minmax(0, 1fr); }
+.studio-mode .client-details dd { min-width: 0; overflow-wrap: anywhere; }
+.studio-mode .client-package-list { display: grid; gap: 12px; min-width: 0; }
+.studio-mode .client-package-card { min-width: 0; padding: 16px; border: 1px solid #eedfe3; border-radius: 12px; background: #fffafb; }
+.studio-mode .client-package-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.studio-mode .client-package-heading > div { min-width: 0; }
+.studio-mode .client-package-heading strong, .studio-mode .client-package-heading small { display: block; overflow-wrap: anywhere; }
+.studio-mode .client-package-heading small { margin-top: 4px; color: #7a6269; font-size: 11px; }
+.studio-mode .client-package-heading .badge { flex-shrink: 0; white-space: nowrap; }
+.studio-mode .client-package-card dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.studio-mode .client-package-card dl div { min-width: 0; }
+.studio-mode .client-package-card dt { color: #7a6269; font-size: 11px; }
+.studio-mode .client-package-card dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+.studio-mode .client-package-visits { width: 100%; }
+.studio-mode .package-visits { display: grid; gap: 8px; }
+.studio-mode .package-visit { display: grid; grid-template-columns: 92px 48px minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0e4e8; font-size: 13px; }
+.studio-mode .package-visit:last-child { border-bottom: 0; }
+.studio-mode .package-visit time { color: #7a6269; }
+.studio-mode .package-visit span { min-width: 0; overflow-wrap: anywhere; }
 .studio-mode .calendar-session-details { display: grid; gap: 28px; }
 .studio-mode .calendar-session-details section { min-width: 0; }
 .studio-mode .calendar-session-details h3 { margin: 0 0 14px; }
@@ -198,5 +219,7 @@
   .studio-mode .studio-dialog-body { padding: 4px 14px 20px; }
   .studio-mode dialog > .dialog-actions { padding: 14px 8px; margin: 0 8px; }
   .studio-mode dialog h2 { font-size: 20px; }
+  .studio-mode .client-package-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .studio-mode .package-visit { grid-template-columns: 88px 44px minmax(0, 1fr); gap: 8px; }
   .studio-mode .calendar-dialog .two-fields { grid-template-columns: 1fr; }
 }
