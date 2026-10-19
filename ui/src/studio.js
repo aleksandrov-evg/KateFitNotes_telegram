@@ -102,13 +102,15 @@ export class StudioUi {
     const packages=personPackages(this.data.packages,id);
     this.showDialog(e(studioPersonName(person)),`<dl class="client-details"><dt>Телефон</dt><dd>${e(person.phones?.primaryPhoneNumber||'—')}</dd><dt>Email</dt><dd>${e(person.emails?.primaryEmail||'—')}</dd></dl><h3>Пакеты клиента</h3>${this.clientPackageCards(packages)}<div class="actions"><a class="button primary" href="#gelios/attendance?client=${encodeURIComponent(id)}">Внести тренировку</a><a class="button secondary" href="#gelios/packages?client=${encodeURIComponent(id)}">Оформить пакет</a></div>`);
     document.querySelectorAll('#confirm a').forEach(link=>link.onclick=()=>document.querySelector('#confirm').close());
-    document.querySelectorAll('[data-package-visits]').forEach(button=>button.onclick=()=>this.packageVisits(button.dataset.packageVisits));
   }
   clientPackageCards(packages) {
     if (!packages.length) return empty('У клиента пока нет пакетов.');
-    return `<div class="client-package-list">${packages.map(membership=>{
+    return `<div class="client-package-table" role="table"><div class="client-package-table-head" role="row"><span>Пакет</span><span>Доступно</span><span>Резерв</span><span>Использовано</span><span>До</span><span class="sr-only">Посещения</span></div>${packages.map(membership=>{
       const visits=this.packageVisitsFor(membership.id);
-      return `<article class="client-package-card"><div class="client-package-heading"><div><strong>${e(membership.name)}</strong><small>${e(status(membership.status))}</small></div><span class="badge">${e(membership.visitsAvailable)} из ${e(membership.visitsGranted)}</span></div><dl><div><dt>В резерве</dt><dd>${e(membership.visitsReserved)}</dd></div><div><dt>Использовано</dt><dd>${e(membership.visitsConsumed)}</dd></div><div><dt>Действует до</dt><dd>${e(membership.expiresOn||'—')}</dd></div></dl><button class="secondary client-package-visits" type="button" data-package-visits="${e(membership.id)}">Посмотреть посещения${visits.length?` · ${e(visits.length)}`:''}</button></article>`;
+      return `<details class="client-package-row"><summary><span class="client-package-name" data-visits="${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}"><strong>${e(membership.name)}</strong><small>${e(status(membership.status))}</small></span><span>${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}</span><span>${e(membership.visitsReserved)}</span><span>${e(membership.visitsConsumed)}</span><span>${e(membership.expiresOn||'—')}</span><span class="client-package-expand">Развернуть</span></summary><div class="client-package-visits-panel">${visits.length?`<h4>Проведённые посещения</h4><div class="package-visits">${visits.map(({booking,session})=>{
+        const moment=visitMoment(session?.startsAt||booking.recordedAt);
+        return `<div class="package-visit"><time datetime="${e(session?.startsAt||booking.recordedAt||'')}">${e(moment.day)}</time><strong>${e(moment.time)}</strong><span>${e(session?.name||'Тренировка')}</span></div>`;
+      }).join('')}</div>`:empty('В рамках этого пакета ещё нет проведённых посещений.')}</div></details>`;
     }).join('')}</div>`;
   }
   packageVisitsFor(membershipId) {
@@ -116,15 +118,6 @@ export class StudioUi {
       .filter(booking=>relationId(booking,'membership')===membershipId&&booking.status==='ATTENDED')
       .map(booking=>({booking,session:this.data.sessions.find(session=>session.id===relationId(booking,'classSession'))}))
       .sort((left,right)=>String(right.session?.startsAt||right.booking.recordedAt).localeCompare(String(left.session?.startsAt||left.booking.recordedAt)));
-  }
-  packageVisits(id) {
-    const membership=this.membership(id);
-    if (!membership) return;
-    const visits=this.packageVisitsFor(id);
-    this.showDialog(`Посещения · ${e(membership.name)}`,visits.length?`<div class="package-visits">${visits.map(({booking,session})=>{
-      const moment=visitMoment(session?.startsAt||booking.recordedAt);
-      return `<div class="package-visit"><time datetime="${e(session?.startsAt||booking.recordedAt||'')}">${e(moment.day)}</time><strong>${e(moment.time)}</strong><span>${e(session?.name||'Тренировка')}</span></div>`;
-    }).join('')}</div>`:empty('В рамках этого пакета ещё нет проведённых посещений.'));
   }
   packageTable(packages) {
     return table(['Клиент / пакет','Доступно','Резерв','Использовано','До','Статус'],packages.map(membership=>`<tr><td>${e(this.clientName(relationId(membership,'person')))}<small class="studio-subline">${e(membership.name)}</small></td><td>${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}</td><td>${e(membership.visitsReserved)}</td><td>${e(membership.visitsConsumed)}</td><td>${e(membership.expiresOn||'—')}</td><td><span class="badge">${e(status(membership.status))}</span></td></tr>`));
