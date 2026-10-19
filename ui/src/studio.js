@@ -13,6 +13,14 @@ const empty = text => `<div class="empty">${e(text)}</div>`;
 const statuses = {ACTIVE:'Активен',EXHAUSTED:'Использован',EXPIRED:'Истёк',FROZEN:'Заморожен',PENDING_PAYMENT:'Ожидает оплаты',REFUNDED:'Возвращён',CANCELLED:'Отменён',ATTENDED:'Посетил',BOOKED:'Записан',CANCELLED_BY_STUDIO:'Отменено студией',GRANT:'Начисление',CONSUME:'Списание',RESERVE:'Резерв',RELEASE:'Возврат резерва'};
 const status = value => statuses[value] || value || '—';
 const date = value => value ? new Date(value).toLocaleString('ru-RU') : '—';
+const visitMoment = value => {
+  const moment = new Date(value);
+  if (!value || !Number.isFinite(moment.getTime())) return {day:'—',time:'—'};
+  return {
+    day:new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Europe/Moscow'}).format(moment),
+    time:new Intl.DateTimeFormat('ru-RU',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Europe/Moscow'}).format(moment),
+  };
+};
 const options = (items, label) => '<option value="">Выберите…</option>' + items.map(item => `<option value="${e(item.id)}">${e(label(item))}</option>`).join('');
 const table = (columns, rows) => rows.length ? `<p class="studio-table-hint">Проведите по таблице, чтобы увидеть остальные поля →</p><div class="table-wrap"><table><thead><tr>${columns.map(column=>`<th>${column}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>` : empty('Пока нет записей');
 
@@ -69,8 +77,12 @@ export class StudioUi {
       <div id="studio-form-error" class="error" role="alert" hidden></div><button class="primary" type="submit">Добавить клиента</button></form></section></div>`);
     const draw=query=>{
       const clients=this.data.clients.filter(person=>[studioPersonName(person),person.phones?.primaryPhoneNumber,person.emails?.primaryEmail].join(' ').toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru')));
-      document.querySelector('#studio-client-list').innerHTML=table(['Клиент','Телефон','Email'],clients.map(person=>`<tr><td><button class="text-button" data-studio-person="${e(person.id)}">${e(studioPersonName(person))}</button></td><td>${e(person.phones?.primaryPhoneCallingCode||'')} ${e(person.phones?.primaryPhoneNumber||'—')}</td><td>${e(person.emails?.primaryEmail||'—')}</td></tr>`));
-      document.querySelectorAll('[data-studio-person]').forEach(button=>button.onclick=()=>this.clientDetails(button.dataset.studioPerson));
+      document.querySelector('#studio-client-list').innerHTML=table(['Клиент','Телефон','Email'],clients.map(person=>`<tr class="studio-client-row" data-studio-person="${e(person.id)}" tabindex="0" role="button" aria-label="Открыть карточку клиента ${e(studioPersonName(person))}"><td><strong>${e(studioPersonName(person))}</strong></td><td>${e(person.phones?.primaryPhoneCallingCode||'')} ${e(person.phones?.primaryPhoneNumber||'—')}</td><td>${e(person.emails?.primaryEmail||'—')}</td></tr>`));
+      document.querySelectorAll('[data-studio-person]').forEach(row=>{
+        const open=()=>this.clientDetails(row.dataset.studioPerson);
+        row.onclick=open;
+        row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
+      });
     };
     draw('');document.querySelector('#studio-search').oninput=event=>draw(event.target.value.trim());
     const form=document.querySelector('#studio-client-form');
@@ -88,8 +100,31 @@ export class StudioUi {
   clientDetails(id) {
     const person=this.data.clients.find(client=>client.id===id);
     const packages=personPackages(this.data.packages,id);
-    this.showDialog(e(studioPersonName(person)),`<dl><dt>Телефон</dt><dd>${e(person.phones?.primaryPhoneNumber||'—')}</dd><dt>Email</dt><dd>${e(person.emails?.primaryEmail||'—')}</dd></dl><h3>Пакеты клиента</h3>${this.packageTable(packages)}<div class="actions"><a class="button primary" href="#gelios/attendance?client=${encodeURIComponent(id)}">Внести тренировку</a><a class="button secondary" href="#gelios/packages?client=${encodeURIComponent(id)}">Оформить пакет</a></div>`);
+    this.showDialog(e(studioPersonName(person)),`<dl class="client-details"><dt>Телефон</dt><dd>${e(person.phones?.primaryPhoneNumber||'—')}</dd><dt>Email</dt><dd>${e(person.emails?.primaryEmail||'—')}</dd></dl><h3>Пакеты клиента</h3>${this.clientPackageCards(packages)}<div class="actions"><a class="button primary" href="#gelios/attendance?client=${encodeURIComponent(id)}">Внести тренировку</a><a class="button secondary" href="#gelios/packages?client=${encodeURIComponent(id)}">Оформить пакет</a></div>`);
     document.querySelectorAll('#confirm a').forEach(link=>link.onclick=()=>document.querySelector('#confirm').close());
+    document.querySelectorAll('[data-package-visits]').forEach(button=>button.onclick=()=>this.packageVisits(button.dataset.packageVisits));
+  }
+  clientPackageCards(packages) {
+    if (!packages.length) return empty('У клиента пока нет пакетов.');
+    return `<div class="client-package-list">${packages.map(membership=>{
+      const visits=this.packageVisitsFor(membership.id);
+      return `<article class="client-package-card"><div class="client-package-heading"><div><strong>${e(membership.name)}</strong><small>${e(status(membership.status))}</small></div><span class="badge">${e(membership.visitsAvailable)} из ${e(membership.visitsGranted)}</span></div><dl><div><dt>В резерве</dt><dd>${e(membership.visitsReserved)}</dd></div><div><dt>Использовано</dt><dd>${e(membership.visitsConsumed)}</dd></div><div><dt>Действует до</dt><dd>${e(membership.expiresOn||'—')}</dd></div></dl><button class="secondary client-package-visits" type="button" data-package-visits="${e(membership.id)}">Посмотреть посещения${visits.length?` · ${e(visits.length)}`:''}</button></article>`;
+    }).join('')}</div>`;
+  }
+  packageVisitsFor(membershipId) {
+    return this.data.bookings
+      .filter(booking=>relationId(booking,'membership')===membershipId&&booking.status==='ATTENDED')
+      .map(booking=>({booking,session:this.data.sessions.find(session=>session.id===relationId(booking,'classSession'))}))
+      .sort((left,right)=>String(right.session?.startsAt||right.booking.recordedAt).localeCompare(String(left.session?.startsAt||left.booking.recordedAt)));
+  }
+  packageVisits(id) {
+    const membership=this.membership(id);
+    if (!membership) return;
+    const visits=this.packageVisitsFor(id);
+    this.showDialog(`Посещения · ${e(membership.name)}`,visits.length?`<div class="package-visits">${visits.map(({booking,session})=>{
+      const moment=visitMoment(session?.startsAt||booking.recordedAt);
+      return `<div class="package-visit"><time datetime="${e(session?.startsAt||booking.recordedAt||'')}">${e(moment.day)}</time><strong>${e(moment.time)}</strong><span>${e(session?.name||'Тренировка')}</span></div>`;
+    }).join('')}</div>`:empty('В рамках этого пакета ещё нет проведённых посещений.'));
   }
   packageTable(packages) {
     return table(['Клиент / пакет','Доступно','Резерв','Использовано','До','Статус'],packages.map(membership=>`<tr><td>${e(this.clientName(relationId(membership,'person')))}<small class="studio-subline">${e(membership.name)}</small></td><td>${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}</td><td>${e(membership.visitsReserved)}</td><td>${e(membership.visitsConsumed)}</td><td>${e(membership.expiresOn||'—')}</td><td><span class="badge">${e(status(membership.status))}</span></td></tr>`));
