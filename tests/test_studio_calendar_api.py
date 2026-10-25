@@ -22,7 +22,7 @@ def calendar_api():
         assert request.headers["authorization"] == "Bearer server-api-key"
         if request.url.path == "/rest/studioEvents":
             return httpx.Response(200, json={"data": {"studioEvents": [{"id": "event", "eventType": "BOOKING_CREATED"}]}, "pageInfo": {"hasNextPage": False}})
-        assert request.url.path in {"/s/studio/bookings/create", "/s/studio/bookings/cancel", "/s/studio/sessions/create", "/s/studio/sessions/payment"}
+        assert request.url.path in {"/s/studio/bookings/create", "/s/studio/bookings/cancel", "/s/studio/bookings/cancel-pay-as-you-go", "/s/studio/sessions/create", "/s/studio/sessions/payment"}
         return httpx.Response(200, json={"success": True, "duplicate": False})
     studio = StudioCrm(SETTINGS, httpx.Client(transport=httpx.MockTransport(handle)))
     with TestClient(create_app(API_SETTINGS, FakeApiRepo(), studio)) as browser:
@@ -30,7 +30,7 @@ def calendar_api():
         yield browser, requests, {"Authorization": f"Bearer {token}"}
 
 
-@pytest.mark.parametrize("path,body", [("create", BOOKING), ("cancel", CANCELLATION)])
+@pytest.mark.parametrize("path,body", [("create", BOOKING), ("cancel", CANCELLATION), ("cancel-pay-as-you-go", CANCELLATION)])
 def test_calendar_actions_use_domain_commands_and_stable_keys(calendar_api, path, body):
     browser, requests, headers = calendar_api
     assert browser.post(f"/api/v1/studio/bookings/{path}", json=body).status_code == 401

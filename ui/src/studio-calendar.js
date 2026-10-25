@@ -1,5 +1,5 @@
 import {escapeHtml as e,today,weekStart,weekDays,addDays,formatDate} from './domain.js';
-import {currencyAmount,sessionPaymentProducts,sessionPaymentContext,sessionPaymentMatches,relationId,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships,studioPersonName,createOperationId,sessionFormats,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from './studio-domain.js';
+import {currencyAmount,sessionCancellationPath,sessionPaymentProducts,sessionPaymentContext,sessionPaymentMatches,relationId,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships,studioPersonName,createOperationId,sessionFormats,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from './studio-domain.js';
 
 const time=value=>new Date(value).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit'});
 const dateTime=value=>new Date(value).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'});
@@ -219,15 +219,15 @@ export class StudioCalendar {
       };
     }
     dialog.querySelectorAll('[data-remove-booking]').forEach(button=>button.onclick=()=>{
-      if(studio.saving||!window.confirm('Убрать клиента из тренировки? Это отмена студией: резерв посещения вернётся в пакет. Запись и событие останутся в CRM.'))return;
-      try {this.send('cancellation',{bookingId:button.dataset.removeBooking,cancelledAt:new Date().toISOString(),idempotencyKey:createOperationId()},'/studio/bookings/cancel',sessionId);}
+      if(studio.saving||!window.confirm('Убрать клиента из тренировки? Это отмена студией: резерв пакета вернётся, а ожидаемая разовая оплата будет отменена. История останется в CRM.'))return;
+      try {this.send('cancellation',{bookingId:button.dataset.removeBooking,cancelledAt:new Date().toISOString(),idempotencyKey:createOperationId()},sessionCancellationPath(data.bookings.find(booking=>booking.id===button.dataset.removeBooking)),sessionId);}
       catch(error){studio.errorBox(error,'#dialog-error');}
     });
     for(const kind of ['booking','cancellation']){
       const body=studio.pending.get(kind);if(!body)continue;
       dialog.querySelectorAll('form input,form select,form button,[data-remove-booking]').forEach(control=>control.disabled=true);
       dialog.querySelector('#calendar-pending').insertAdjacentHTML('beforeend',`<section class="note"><h3>Незавершённая операция</h3><p>Проверьте участников и журнал. Повтор сохраняет прежний ключ: <code>${e(body.idempotencyKey)}</code>.</p><button data-retry-calendar="${kind}">Повторить прежний запрос</button><button data-clear-calendar="${kind}">Сбросить после проверки CRM</button></section>`);
-      dialog.querySelector(`[data-retry-calendar="${kind}"]`).onclick=()=>this.send(kind,body,kind==='booking'?'/studio/bookings/create':'/studio/bookings/cancel',body.classSessionId||relationId(data.bookings.find(booking=>booking.id===body.bookingId),'classSession'));
+      dialog.querySelector(`[data-retry-calendar="${kind}"]`).onclick=()=>this.send(kind,body,kind==='booking'?'/studio/bookings/create':sessionCancellationPath(data.bookings.find(booking=>booking.id===body.bookingId)),body.classSessionId||relationId(data.bookings.find(booking=>booking.id===body.bookingId),'classSession'));
       dialog.querySelector(`[data-clear-calendar="${kind}"]`).onclick=()=>{
         if(studio.saving||!window.confirm('Результат проверен в CRM? Сброс не отменяет серверное действие.'))return;
         studio.pending.clear(kind);this.open(sessionId);

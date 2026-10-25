@@ -82,6 +82,7 @@ export const sessionMemberships = (packages, products, personId, session) => per
   const category=session.sessionFormat==='PERSONAL_EQUIPMENT'?'PERSONAL':'GROUP_PACKAGE';
   return session.sessionFormat!=='SPLIT_EQUIPMENT' && membership.status==='ACTIVE' && membership.visitsAvailable>0 && product?.category===category && product.sessionFormat===session.sessionFormat && membership.activatedAt && new Date(membership.activatedAt)<=new Date(session.startsAt) && (!membership.expiresOn || membership.expiresOn>=session.startsAt.slice(0,10)) && (session.status!=='COMPLETED' || product.durationMinutes===session.durationMinutes);
 });
+export const sessionCancellationPath = booking => relationId(booking,'membership')?'/studio/bookings/cancel':'/studio/bookings/cancel-pay-as-you-go';
 export const sessionPaymentProducts = (products, session) => products.filter(product => {
   const day=calendarDate(session.startsAt);
   return session.sessionFormat!=='SPLIT_EQUIPMENT' && product.isActive &&

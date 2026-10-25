@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Api} from '../src/api.js';
 import {StudioUi} from '../src/studio.js';
-import {sessionPaymentProducts,sessionPaymentContext,sessionPaymentMatches,studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,paymentStartOfMoscowDay,studioCrmError,sessionParticipants,sessionCanAdd,sessionMemberships,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from '../src/studio-domain.js';
+import {sessionCancellationPath,sessionPaymentProducts,sessionPaymentContext,sessionPaymentMatches,studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,paymentStartOfMoscowDay,studioCrmError,sessionParticipants,sessionCanAdd,sessionMemberships,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from '../src/studio-domain.js';
 
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};};
 const json=body=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
@@ -152,4 +152,9 @@ test('разовая оплата подходит к формату, длите
   for(const change of [{startsAt:'2026-10-25T21:30:00Z'},{durationMinutes:60},{sessionFormat:'TRX'},{status:'PLANNED'}])assert.equal(sessionPaymentMatches(participant,{...session,...change}),false);
   const personal={...session,sessionFormat:'PERSONAL_EQUIPMENT'};
   assert.equal(sessionPaymentProducts([{...product,category:'PERSONAL',sessionFormat:'PERSONAL_EQUIPMENT',visitsIncluded:4}],personal).length,0);
+});
+
+test('отмена разовой записи использует команду отмены долга, пакетной — возврат резерва',()=>{
+  assert.equal(sessionCancellationPath({membershipId:'package'}),'/studio/bookings/cancel');
+  assert.equal(sessionCancellationPath({membershipId:null,paymentStatus:'EXPECTED'}),'/studio/bookings/cancel-pay-as-you-go');
 });

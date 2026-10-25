@@ -577,3 +577,9 @@ def delete_expense(expense_id: UUID, username: str = Depends(require_user), stud
 @router.post("/expenses/report")
 def expense_report(body: ExpenseMonthRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     return studio.request("POST", "/s/studio/expenses/report", body=body.model_dump())
+
+
+@router.post("/bookings/cancel-pay-as-you-go")
+def cancel_pay_as_you_go_booking(body: CancelBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("bookings/cancel-pay-as-you-go", data, username, lambda: studio.command("/studio/bookings/cancel-pay-as-you-go", data))
