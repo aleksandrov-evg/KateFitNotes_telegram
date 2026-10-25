@@ -99,9 +99,51 @@ export class StudioUi {
   }
   clientDetails(id) {
     const person=this.data.clients.find(client=>client.id===id);
+    if(!person)return;
     const packages=personPackages(this.data.packages,id);
-    this.showDialog(e(studioPersonName(person)),`<dl class="client-details"><dt>Телефон</dt><dd>${e(person.phones?.primaryPhoneNumber||'—')}</dd><dt>Email</dt><dd>${e(person.emails?.primaryEmail||'—')}</dd></dl><h3>Пакеты клиента</h3>${this.clientPackageCards(packages)}<div class="actions client-card-actions"><a class="button primary" href="#gelios/attendance?client=${encodeURIComponent(id)}">Внести тренировку</a><a class="button secondary" href="#gelios/packages?client=${encodeURIComponent(id)}">Оформить пакет</a></div>`);
+    this.showDialog(e(studioPersonName(person)),`<dl class="client-details"><dt>Телефон</dt><dd>${e(person.phones?.primaryPhoneNumber||'—')}</dd><dt>Email</dt><dd>${e(person.emails?.primaryEmail||'—')}</dd></dl><button id="studio-client-rename" type="button" class="secondary">Редактировать контакт</button><h3>Пакеты клиента</h3>${this.clientPackageCards(packages)}<div class="actions client-card-actions"><a class="button primary" href="#gelios/attendance?client=${encodeURIComponent(id)}">Внести тренировку</a><a class="button secondary" href="#gelios/packages?client=${encodeURIComponent(id)}">Оформить пакет</a></div>`);
+    document.querySelector('#studio-client-rename').onclick=()=>this.renameClient(id);
     document.querySelectorAll('#confirm a').forEach(link=>link.onclick=()=>document.querySelector('#confirm').close());
+  }
+  renameClient(id) {
+    const person=this.data.clients.find(client=>client.id===id);
+    if(!person)return;
+    const generation=this.generation, data=this.data;
+    this.showDialog('Редактировать контакт',`<form id="studio-rename-form">
+      ${field('Имя',`<input name="firstName" maxlength="100" required autocomplete="given-name" value="${e(person.name?.firstName||'')}">`)}
+      ${field('Фамилия',`<input name="lastName" maxlength="100" autocomplete="family-name" value="${e(person.name?.lastName||'')}">`)}
+      ${field('Email',`<input name="email" type="email" maxlength="254" autocomplete="email" placeholder="example@gmail.com" value="${e(person.emails?.primaryEmail||'')}">`)}
+      <button type="submit" hidden>Сохранить контакт</button>
+      </form>`,async()=>{
+      const form=document.querySelector('#studio-rename-form');
+      const body={firstName:form.elements.firstName.value.trim(),lastName:form.elements.lastName.value.trim(),email:form.elements.email.value.trim()};
+      if(!body.firstName)throw new Error('Укажите имя клиента.');
+      if(!form.reportValidity())throw new Error('Проверьте имя, фамилию и email клиента.');
+      if(this.saving)throw new Error('Дождитесь результата сохранения.');
+      this.saving=true;
+      form.querySelectorAll('input').forEach(input=>input.disabled=true);
+      try {
+        const result=await this.api.request(`/studio/clients/${encodeURIComponent(id)}`,{method:'PATCH',body});
+        if(result?.id!==id||result?.name?.firstName!==body.firstName||result?.name?.lastName!==body.lastName||result?.emails?.primaryEmail!==body.email)throw new Error('CRM не подтвердила изменения контакта. Обновите данные и проверьте карточку клиента.');
+        if(generation!==this.generation)return;
+        this.data=data;
+        person.name=result.name;
+        person.emails=result.emails;
+        setStudioSelectClients(data.clients);
+        await this.render(this.route);
+        this.notify('Контакт сохранён в CRM.');
+      } catch(error) {
+        if(!error.status||error.status>=500)this.data=null;
+        throw error;
+      } finally {
+        this.saving=false;
+        form.querySelectorAll('input').forEach(input=>input.disabled=false);
+      }
+    });
+    const dialog=document.querySelector('#confirm'),form=dialog.querySelector('#studio-rename-form');
+    dialog.querySelector('#dialog-submit').textContent='Сохранить';
+    form.onsubmit=event=>{event.preventDefault();dialog.querySelector('#dialog-submit').click();};
+    form.elements.firstName.focus();
   }
   clientPackageCards(packages) {
     if (!packages.length) return empty('У клиента пока нет пакетов.');

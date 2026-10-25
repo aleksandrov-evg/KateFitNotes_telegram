@@ -174,6 +174,36 @@ class StudioCrm:
             raise HTTPException(502, "CRM вернула некорректную страницу списка.")
         return {"items": items, "next_cursor": next_cursor}
 
+    def rename_person(self, person_id: UUID, person: RenameClientRequest) -> dict:
+        name = {"firstName": person.first_name, "lastName": person.last_name}
+        payload = {"name": name}
+        if person.email is not None:
+            current_data = self.request("GET", f"/rest/people/{person_id}").get("data")
+            current = current_data.get("person") if isinstance(current_data, dict) else None
+            if not isinstance(current, dict) or current.get("id") != str(person_id):
+                raise HTTPException(502, "Не удалось проверить контакт перед сохранением email.")
+            emails = current.get("emails") or {}
+            if not isinstance(emails, dict):
+                raise HTTPException(502, "CRM вернула некорректные email контакта.")
+            payload["emails"] = {**emails, "primaryEmail": person.email}
+        try:
+            result = self.request("PATCH", f"/rest/people/{person_id}", body=payload)
+        except HTTPException as exc:
+            if exc.status_code >= 500:
+                raise HTTPException(502, "Сохранение контакта не подтверждено. Обновите список клиентов и при необходимости повторите изменение.") from exc
+            raise
+        data = result.get("data")
+        updated = data.get("updatePerson") if isinstance(data, dict) else None
+        if not isinstance(updated, dict) or updated.get("id") != str(person_id) or updated.get("name") != name:
+            raise HTTPException(502, "Сохранение контакта не подтверждено. Обновите список клиентов и при необходимости повторите изменение.")
+        response = {"id": str(person_id), "name": name}
+        if person.email is not None:
+            emails = updated.get("emails")
+            if not isinstance(emails, dict) or emails.get("primaryEmail") != person.email:
+                raise HTTPException(502, "Сохранение email не подтверждено. Обновите список клиентов и проверьте карточку.")
+            response["emails"] = emails
+        return response
+
     def create_person(self, person: ClientRequest, username: str) -> dict:
         data = person.crm_data()
         event = {"id": str(person.client_id), "name": "Клиент добавлен из UI", "eventType": "CLIENT_CREATED",
@@ -249,6 +279,20 @@ class ClientRequest(BaseModel):
         if self.email:
             data["emails"] = {"primaryEmail": self.email}
         return data
+
+
+class RenameClientRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    first_name: str = Field(alias="firstName", min_length=1, max_length=100)
+    last_name: str = Field(alias="lastName", max_length=100)
+    email: str | None = Field(default=None, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        if value is None:
+            raise ValueError("Передайте email строкой или не передавайте поле")
+        return ClientRequest.validate_email(value)
 
 
 class PackagePaymentRequest(BaseModel):
@@ -377,6 +421,11 @@ def records(resource: Literal["clients", "products", "packages", "bookings", "se
 def create_client(body: ClientRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     data = body.model_dump(mode="json", by_alias=True)
     return studio.perform_operation("clients/create", data, username, lambda: studio.create_person(body, username))
+
+
+@router.patch("/clients/{person_id}")
+def rename_client(person_id: UUID, body: RenameClientRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.rename_person(person_id, body)
 
 
 @router.post("/package-payments/confirm")
