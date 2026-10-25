@@ -107,3 +107,40 @@ test('оплаты и занятия позже текущего момента 
   assert.equal(report.metrics.visits,0);
   assert.equal(report.clients.active.length,0);
 });
+test('удалённое занятие отменённой записи скрывает только количество отмен',()=>{
+  const report=buildAnalytics({clients:[{id:'a',name:'Анна'}],sessions:[{id:'done',status:'COMPLETED',sessionFormat:'GROUP_REFORMER',capacity:4,startsAt:'2026-10-01T10:00:00Z'}],bookings:[{id:'attended',status:'ATTENDED',personId:'a',classSessionId:'done'},{id:'orphan',status:'CANCELLED_BY_STUDIO',classSessionId:null}]},options);
+  assert.equal(report.metrics.visits,1);
+  assert.equal(report.metrics.activeClients,1);
+  assert.equal(report.metrics.occupancy,25);
+  assert.equal(report.clients.available,true);
+  assert.equal(report.clients.new.length,1);
+  assert.equal(report.metrics.cancellations,null);
+  assert.equal(report.metrics.noShows,0);
+  assert.ok(report.availability.cancellations);
+  assert.equal(report.availability.attendance,undefined);
+});
+test('посещение без занятия скрывает посещаемость, но не отмены и неявки',()=>{
+  const report=buildAnalytics({bookings:[{id:'orphan',status:'ATTENDED',personId:'a',classSessionId:null}]},options);
+  assert.equal(report.metrics.visits,null);
+  assert.equal(report.metrics.activeClients,null);
+  assert.equal(report.metrics.occupancy,null);
+  assert.equal(report.clients.available,false);
+  assert.equal(report.metrics.cancellations,0);
+  assert.equal(report.metrics.noShows,0);
+  assert.ok(report.availability.attendance);
+});
+test('неявка без занятия скрывает только количество неявок',()=>{
+  const report=buildAnalytics({bookings:[{status:'NO_SHOW',classSessionId:null}]},options);
+  assert.equal(report.metrics.visits,0);
+  assert.equal(report.metrics.activeClients,0);
+  assert.equal(report.metrics.cancellations,0);
+  assert.equal(report.metrics.noShows,null);
+  assert.ok(report.availability.noShows);
+});
+test('состоявшееся занятие без даты продолжает скрывать посещаемость',()=>{
+  const report=buildAnalytics({sessions:[{id:'missing-date',status:'COMPLETED',sessionFormat:'GROUP_REFORMER',capacity:4}]},options);
+  assert.equal(report.metrics.visits,null);
+  assert.equal(report.metrics.sessions,null);
+  assert.equal(report.clients.available,false);
+  assert.ok(report.availability.attendance);
+});

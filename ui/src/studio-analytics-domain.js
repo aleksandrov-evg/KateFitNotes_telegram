@@ -44,6 +44,7 @@ const sumMoney = (records, field) => {
 };
 const ratio = (numerator, denominator) => denominator ? numerator / denominator * 100 : null;
 const GROUP_FORMATS = ['GROUP_REFORMER','MAT_PILATES','STRETCHING','TRX'];
+const CANCELLATION_STATUSES = ['CANCELLED_IN_TIME','LATE_CANCEL','CANCELLED_BY_STUDIO'];
 const KNOWN_FORMATS = [...GROUP_FORMATS,'PERSONAL_EQUIPMENT','SPLIT_EQUIPMENT','INTRO_REFORMER'];
 const groupSessions = session => GROUP_FORMATS.includes(session.sessionFormat);
 const available = records => records.filter(record => !record.deletedAt);
@@ -61,7 +62,10 @@ export const buildAnalytics = (input = {}, {month, now = new Date()} = {}) => {
   const bookingDate = booking => sessionsById.get(relationId(booking,'classSession'))?.startsAt;
   const occurred = value => dated(value) && (/^\d{4}-\d{2}-\d{2}$/.test(value) ? dated(value) <= calendarDate(now) : new Date(value) <= now);
   const completedBookings = data.bookings.filter(booking => sessionsById.get(relationId(booking,'classSession'))?.status === 'COMPLETED' && occurred(bookingDate(booking)));
-  const hasInvalidBookingDate = data.bookings.some(booking => !dated(bookingDate(booking)));
+  const hasInvalidAttendanceDate = data.bookings.some(booking => booking.status === 'ATTENDED' && !dated(bookingDate(booking)));
+  const hasInvalidCancellationDate = data.bookings.some(booking => CANCELLATION_STATUSES.includes(booking.status) && !dated(bookingDate(booking)));
+  const hasInvalidNoShowDate = data.bookings.some(booking => booking.status === 'NO_SHOW' && !dated(bookingDate(booking)));
+  const bookingSourcesAvailable = hasSource('bookings') && hasSource('sessions');
   const hasInvalidSessionDate = data.sessions.some(session => session.status === 'COMPLETED' && !dated(session.startsAt));
   const hasInvalidPaidDate = data.expenses.some(expense => expense.paidOn && !dated(expense.paidOn));
   const hasUndatedPayment = data.payments.some(payment => ['PAID','PARTIALLY_REFUNDED','REFUNDED'].includes(payment.status) && !dated(payment.paidAt));
@@ -81,10 +85,10 @@ export const buildAnalytics = (input = {}, {month, now = new Date()} = {}) => {
     const groupVisits = visits.filter(booking => groupIds.has(relationId(booking,'classSession'))).length;
     const receipts = !hasSource('payments') || hasUndatedPayment ? null : sumMoney(payments,'amount'), expensePayments = !hasSource('expenses') || hasInvalidPaidDate ? null : sumMoney(paidExpenses,'amount');
     const refunds = !hasSource('payments') || hasUndatedRefund ? null : '0';
-    const attendanceAvailable = hasSource('bookings') && hasSource('sessions') && !hasInvalidBookingDate && !hasInvalidSessionDate;
-    return {...nullMoney,receipts,refunds,expenses:!hasSource('expenses') || hasUndatedExpense ? null : sumMoney(expenses,'amount'),expensePayments,cashFlow:receipts !== null && expensePayments !== null && refunds !== null ? (BigInt(receipts)-BigInt(expensePayments)-BigInt(refunds)).toString() : null,visits:attendanceAvailable ? visits.length : null,sessions:hasSource('sessions') && !hasInvalidSessionDate ? sessions.length : null,activeClients:attendanceAvailable ? new Set(visits.map(booking=>relationId(booking,'person')).filter(Boolean)).size : null,occupancy:attendanceAvailable && capacityValid ? ratio(groupVisits,capacity) : null,cancellations:attendanceAvailable ? bookings.filter(booking=>['CANCELLED_IN_TIME','LATE_CANCEL','CANCELLED_BY_STUDIO'].includes(booking.status)).length : null,noShows:attendanceAvailable ? bookings.filter(booking=>booking.status==='NO_SHOW').length : null};
+    const attendanceAvailable = bookingSourcesAvailable && !hasInvalidAttendanceDate && !hasInvalidSessionDate;
+    return {...nullMoney,receipts,refunds,expenses:!hasSource('expenses') || hasUndatedExpense ? null : sumMoney(expenses,'amount'),expensePayments,cashFlow:receipts !== null && expensePayments !== null && refunds !== null ? (BigInt(receipts)-BigInt(expensePayments)-BigInt(refunds)).toString() : null,visits:attendanceAvailable ? visits.length : null,sessions:hasSource('sessions') && !hasInvalidSessionDate ? sessions.length : null,activeClients:attendanceAvailable ? new Set(visits.map(booking=>relationId(booking,'person')).filter(Boolean)).size : null,occupancy:attendanceAvailable && capacityValid ? ratio(groupVisits,capacity) : null,cancellations:bookingSourcesAvailable && !hasInvalidCancellationDate ? bookings.filter(booking=>CANCELLATION_STATUSES.includes(booking.status)).length : null,noShows:bookingSourcesAvailable && !hasInvalidNoShowDate ? bookings.filter(booking=>booking.status==='NO_SHOW').length : null};
   };
-  const attendanceAvailable = hasSource('bookings') && hasSource('sessions') && !hasInvalidBookingDate && !hasInvalidSessionDate;
+  const attendanceAvailable = bookingSourcesAvailable && !hasInvalidAttendanceDate && !hasInvalidSessionDate;
   const clientsAvailable = attendanceAvailable && hasSource('clients');
   const metrics = metricsFor(period.start,period.end);
   const currentSessions = data.sessions.filter(session=>session.status==='COMPLETED' && occurred(session.startsAt) && inside(session.startsAt,period.start,period.end));
@@ -108,7 +112,9 @@ export const buildAnalytics = (input = {}, {month, now = new Date()} = {}) => {
   const availability={earnedRevenue:'В CRM нет денежной стоимости каждого списания и неизменяемой истории стоимости посещения. Доход по занятиям пока недоступен.',profit:'Для расчёта прибыли нужен подтверждённый доход по проведённым занятиям.',margin:'Для расчёта рентабельности нужен подтверждённый доход.',prepayments:'Исторический остаток предоплат нельзя восстановить из текущих остатков пакетов.',debts:'Не хватает истории начислений и погашений задолженности на конец месяца.'};
   if(missingSources.length)availability.sources=`Не полностью загружены источники: ${missingSources.join(', ')}. Связанные показатели недоступны.`;
   if(currentSessions.some(session=>!KNOWN_FORMATS.includes(session.sessionFormat)))availability.occupancy='Есть занятия с неизвестным форматом. Групповая загрузка недоступна.';
-  if(hasInvalidBookingDate || hasInvalidSessionDate)availability.attendance='Есть занятия или записи без корректной даты. Итоги посещений неполны.';
+  if(hasInvalidAttendanceDate || hasInvalidSessionDate)availability.attendance='Есть занятия или записи без корректной даты. Итоги посещений неполны.';
+  if(hasInvalidCancellationDate)availability.cancellations='Есть отменённые записи без связанного занятия или корректной даты. Количество отмен по месяцам недоступно.';
+  if(hasInvalidNoShowDate)availability.noShows='Есть неявки без связанного занятия или корректной даты. Количество неявок по месяцам недоступно.';
   if(hasInvalidPaidDate)availability.expensePayments='Есть расходы с некорректной датой выплаты. Итоги выплат недоступны.';
   if(hasUndatedPayment)availability.receipts='Есть проведённые оплаты без даты. Поступления по месяцам нельзя определить достоверно.';
   if(hasUndatedExpense)availability.expenses='Есть расходы без корректного месяца начисления (первое число месяца). Итоги начисленных расходов неполны.';
