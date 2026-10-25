@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {today,addDays} from '../src/domain.js';
 
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
-const browser=await chromium.launch({headless:true,...(process.env.UI_SMOKE_CHROME?{executablePath:process.env.UI_SMOKE_CHROME}:{})});
+const browser=await chromium.launch({headless:process.env.UI_SMOKE_HEADLESS==='1',...(process.env.UI_SMOKE_CHROME?{executablePath:process.env.UI_SMOKE_CHROME}:{})});
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
 page.setDefaultTimeout(8000);
 const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -54,7 +54,7 @@ try{
   assert.equal(await form.getByLabel('Название (из формата)').inputValue(),'Группа на реформере');
   assert.ok(await form.getByLabel('Название (из формата)').getAttribute('readonly')!==null);
   await form.getByLabel('Длительность, минут').fill('60');
-  assert.equal(await form.locator('#session-person option').count(),2);
+  assert.equal(await form.locator('#session-person option').count(),4);
   await form.getByRole('combobox',{name:'Доступный клиент',exact:true}).fill('Групп');
   assert.equal(await modal.getByRole('option').count(),1);
   await chooseOption(form.getByLabel('Доступный клиент'),groupPerson);
@@ -97,7 +97,7 @@ try{
   assert.equal(await form.getByLabel('Название (из формата)').inputValue(),'Персональное на оборудовании');
   assert.equal(await form.getByLabel('Количество мест').inputValue(),'1');
   assert.equal(await form.getByLabel('Количество мест').getAttribute('readonly'),'');
-  assert.equal(await form.locator('#session-person option').count(),2);
+  assert.equal(await form.locator('#session-person option').count(),4);
   await chooseOption(form.getByLabel('Доступный клиент'),personalPerson);
   await form.getByRole('button',{name:'Добавить в список',exact:true}).click();
   assert.ok(await form.getByRole('button',{name:'Добавить в список',exact:true}).isDisabled());

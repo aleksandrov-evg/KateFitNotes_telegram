@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Api} from '../src/api.js';
 import {StudioUi} from '../src/studio.js';
-import {studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,paymentStartOfMoscowDay,studioCrmError,sessionParticipants,sessionCanAdd,sessionMemberships,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from '../src/studio-domain.js';
+import {sessionPaymentProducts,sessionPaymentContext,sessionPaymentMatches,studioNav,studioPersonName,relationId,currencyAmount,eligibleProducts,personPackages,createOperationId,attendancePayload,PendingStudioOperation,calendarDate,paymentStartOfMoscowDay,studioCrmError,sessionParticipants,sessionCanAdd,sessionMemberships,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from '../src/studio-domain.js';
 
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};};
 const json=body=>new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}});
@@ -141,4 +141,15 @@ test('доменная ошибка и неизвестный результат
   await assert.rejects(api.request('/studio/attendance/preview',{method:'POST',body:{}}),/Нет посещений/);
   api.fetcher=async()=>new Response(JSON.stringify({detail:'Результат неизвестен. Используйте прежний ключ.'}),{status:502});
   await assert.rejects(api.request('/studio/attendance/record-past',{method:'POST',body:{}}),/прежний ключ/);
+});
+
+test('разовая оплата подходит к формату, длительности и московскому дню, персональный блок не продаётся как разовое',()=>{
+  const session={sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-24T21:30:00Z',durationMinutes:55,status:'COMPLETED'};
+  const product={id:'single',name:'Разовая',category:'SINGLE',sessionFormat:'GROUP_REFORMER',durationMinutes:55,isActive:true,validFrom:'2026-10-25',validTo:'2026-10-25',price:{amountMicros:1000000000}};
+  assert.deepEqual(sessionPaymentProducts([product,{...product,id:'wrong',durationMinutes:60}],session).map(product=>product.id),['single']);
+  const participant={personId:'person',productId:'single',paymentId:'payment',paymentContext:sessionPaymentContext('person','single',session)};
+  assert.equal(sessionPaymentMatches(participant,session),true);
+  for(const change of [{startsAt:'2026-10-25T21:30:00Z'},{durationMinutes:60},{sessionFormat:'TRX'},{status:'PLANNED'}])assert.equal(sessionPaymentMatches(participant,{...session,...change}),false);
+  const personal={...session,sessionFormat:'PERSONAL_EQUIPMENT'};
+  assert.equal(sessionPaymentProducts([{...product,category:'PERSONAL',sessionFormat:'PERSONAL_EQUIPMENT',visitsIncluded:4}],personal).length,0);
 });

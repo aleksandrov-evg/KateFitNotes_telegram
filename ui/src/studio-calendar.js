@@ -1,5 +1,5 @@
 import {escapeHtml as e,today,weekStart,weekDays,addDays,formatDate} from './domain.js';
-import {relationId,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships,studioPersonName,createOperationId,sessionFormats,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from './studio-domain.js';
+import {currencyAmount,sessionPaymentProducts,sessionPaymentContext,sessionPaymentMatches,relationId,calendarDate,sessionParticipants,sessionCanAdd,sessionMemberships,studioPersonName,createOperationId,sessionFormats,sessionTimeState,sessionCreationPayload,calendarSessionLayout} from './studio-domain.js';
 
 const time=value=>new Date(value).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit'});
 const dateTime=value=>new Date(value).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'});
@@ -29,9 +29,9 @@ export class StudioCalendar {
       this.render();document.querySelector('.refresh').onclick=()=>studio.render('calendar',true);
     });
     document.querySelectorAll('[data-session]').forEach(button=>button.onclick=event=>{event.stopPropagation();if(!studio.saving)this.open(button.dataset.session);});
-    const pendingSession=studio.pending.get('session');
+    const pendingSession=studio.pending.get('session')||studio.pending.get('session-payment')||studio.pending.get('session-draft');
     if(pendingSession){
-      document.querySelector('.studio-calendar').insertAdjacentHTML('beforeend','<section class="note"><p>Создание тренировки не подтверждено. Не создавайте новую: восстановите прежний запрос.</p><button id="calendar-session-recover">Продолжить создание</button></section>');
+      document.querySelector('.studio-calendar').insertAdjacentHTML('beforeend','<section class="note"><p>Есть сохранённый черновик или незавершённая операция. Продолжите создание тренировки.</p><button id="calendar-session-recover">Продолжить создание</button></section>');
       document.querySelector('#calendar-session-recover').onclick=()=>this.openCreate();
     }
     const pending=studio.pending.get('booking')||studio.pending.get('cancellation');
@@ -44,7 +44,7 @@ export class StudioCalendar {
   openCreate(slot) {
     const {studio}=this,pending=studio.pending.get('session');
     const pendingStart=pending?calendarDate(pending.startsAt)+'T'+time(pending.startsAt):null;
-    const values=pending?{...pending,startsAt:pendingStart,pastConfirmed:pending.pastConfirmed?'on':''}:slot?{startsAt:slot}:this.creationDraft||{};
+    const values=pending?{...pending,startsAt:pendingStart,pastConfirmed:pending.pastConfirmed?'on':''}:studio.pending.get('session-payment')?studio.pending.get('session-draft')||{}:slot?{startsAt:slot}:this.creationDraft||studio.pending.get('session-draft')||{};
     studio.showDialog('Новая тренировка',`<form id="calendar-create-form">
       ${field('session-name','Название (из формата)','<input id="session-name" name="name" readonly>')}
       ${field('session-format','Формат',`<select id="session-format" name="sessionFormat">${sessionFormats.map(([value,text])=>`<option value="${value}">${e(text)}</option>`).join('')}</select>`)}
@@ -54,10 +54,10 @@ export class StudioCalendar {
       <section class="session-participant-picker"><h3>Участники</h3><p id="session-participant-help" class="muted"></p>
       ${field('session-person','Доступный клиент','<select id="session-person"><option value="">Выберите клиента</option></select>')}
       ${field('session-membership','Пакет клиента','<select id="session-membership"><option value="">Сначала выберите клиента</option></select>')}
-      <button id="session-participant-add" type="button" class="secondary">Добавить в список</button><div id="session-selected-people"></div></section>
+      <button id="session-participant-add" type="button" class="secondary">Добавить в список</button><div id="session-selected-people"></div><div id="session-payment-panel"></div></section>
       <p id="session-time-note" class="note"></p><label id="session-past-confirmation" class="session-confirmation"><input name="pastConfirmed" type="checkbox"> Подтверждаю, что тренировка состоялась</label>
       ${field('session-attendance-reason','Основание внесения посещений (для прошедшей тренировки)','<input id="session-attendance-reason" name="attendanceReason" maxlength="2000">')}
-      <p class="muted">Будущее: резерв по одному посещению участника. Прошедшее: после проверки CRM списание по одному фактическому посещению. Пустое занятие ничего не списывает.</p><div id="session-create-error" class="error" role="alert" hidden></div><button id="session-create-submit" type="submit" class="primary">Сохранить тренировку</button></form><div id="session-create-pending"></div>`);
+      <p class="muted">По пакету: резерв на будущее или списание за прошедшую тренировку. Разовая оплата: долг на будущее или полученная оплата за прошедшую. Пустое занятие ничего не списывает.</p><div id="session-create-error" class="error" role="alert" hidden></div><button id="session-create-submit" type="submit" class="primary">Сохранить тренировку</button></form><div id="session-create-pending"></div>`);
     const dialog=document.querySelector('#confirm');dialog.classList.add('calendar-dialog');
     const form=dialog.querySelector('#calendar-create-form');
     form.elements.name.value=values.name||'';
@@ -66,27 +66,94 @@ export class StudioCalendar {
     form.durationMinutes.value=values.durationMinutes||55;form.capacity.value=values.capacity||4;
     form.pastConfirmed.checked=values.pastConfirmed==='on';
     form.attendanceReason.value=values.attendanceReason||'';
-    let selected=(values.participants||[]).map(participant=>({...participant}));
+    const savedParticipants=studio.pending.get('session-draft')?.participants||[];
+    let selected=(values.participants||[]).map(participant=>({...savedParticipants.find(saved=>saved.personId===participant.personId&&saved.paymentId===participant.paymentId),...participant}));
+    let paymentPersonId=null;
+    let paymentProductId='';
+    let paymentMethod='SBP';
     const personSelect=dialog.querySelector('#session-person'),membershipSelect=dialog.querySelector('#session-membership');
     const sessionDraft=()=>({startsAt:new Date(form.startsAt.value+':00+03:00').toISOString(),sessionFormat:form.sessionFormat.value,durationMinutes:Number(form.durationMinutes.value),status:sessionTimeState(form.startsAt.value+':00+03:00',form.durationMinutes.value)});
     const matching=personId=>sessionMemberships(studio.data.packages,studio.data.products,personId,sessionDraft());
     const renderPeople=()=>{
-      let eligible=[];try{eligible=studio.data.clients.filter(person=>matching(person.id).length>0);}catch{}
+      const eligible=form.sessionFormat.value==='SPLIT_EQUIPMENT'?[]:studio.data.clients;
+      let draft=null;try{draft=sessionDraft();}catch{}
       const chosen=personSelect.value,chosenPackage=membershipSelect.value;
       personSelect.innerHTML='<option value="">Выберите клиента</option>'+eligible.filter(person=>!selected.some(participant=>participant.personId===person.id)).map(person=>`<option value="${e(person.id)}">${e(studioPersonName(person))}</option>`).join('');
       personSelect.value=eligible.some(person=>person.id===chosen&&!selected.some(participant=>participant.personId===chosen))?chosen:'';
-      const packages=personSelect.value?matching(personSelect.value):[];
+      const packages=personSelect.value&&draft?matching(personSelect.value):[];
       membershipSelect.innerHTML='<option value="">Выберите пакет</option>'+packages.map(membership=>`<option value="${e(membership.id)}">${e(membership.name)} · доступно ${e(membership.visitsAvailable)}</option>`).join('');
       membershipSelect.value=packages.some(membership=>membership.id===chosenPackage)?chosenPackage:packages[0]?.id||'';
       const personal=form.sessionFormat.value==='PERSONAL_EQUIPMENT';
-      dialog.querySelector('#session-participant-help').textContent=(personal?'Персональная: один клиент с персональным пакетом.':'Групповая: несколько клиентов с групповыми пакетами.')+` Подходящих клиентов: ${eligible.length}. Выбрано: ${selected.length}/${form.capacity.value}. Пакет должен покрывать дату, формат и для прошлой даты — длительность занятия.`;
-      dialog.querySelector('#session-selected-people').innerHTML=selected.map(participant=>`<div class="calendar-participant"><div><strong>${e(studio.clientName(participant.personId))}</strong><small>${e(studio.membership(participant.membershipId)?.name||'Пакет')}</small></div><button type="button" data-remove-selected="${e(participant.personId)}">Убрать из списка</button></div>`).join('');
-      dialog.querySelectorAll('[data-remove-selected]').forEach(button=>button.onclick=()=>{selected=selected.filter(participant=>participant.personId!==button.dataset.removeSelected);update();});
-      dialog.querySelector('#session-participant-add').disabled=Boolean(pending)||selected.length>=Number(form.capacity.value)||!personSelect.value||!membershipSelect.value;
+      dialog.querySelector('#session-participant-help').textContent=(personal?'Персональная: один клиент.':'Групповая: участники по пакетам и с разовой оплатой.')+` Подходящих клиентов: ${eligible.length}. Выбрано: ${selected.length}/${form.capacity.value}. Пакет должен покрывать дату, формат и для прошлой даты — длительность занятия.`;
+      dialog.querySelector('#session-selected-people').innerHTML=selected.map(participant=>`<div class="calendar-participant"><div><strong>${e(studio.clientName(participant.personId))}</strong><small>${e(participant.paymentId?(draft&&sessionPaymentMatches(participant,draft)?(draft.status==='COMPLETED'?'Разовая оплата получена':'Разовая оплата · долг'):'Параметры тренировки изменились — проверьте оплату'):studio.membership(participant.membershipId)?.name||'Нет предоплаченного пакета')}</small></div>${!participant.membershipId&&!participant.paymentId?`<button type="button" data-create-payment="${e(participant.personId)}">Создать оплату</button>`:''}<button type="button" data-remove-selected="${e(participant.personId)}">Убрать из списка</button></div>`).join('');
+      dialog.querySelectorAll('[data-remove-selected]').forEach(button=>button.onclick=()=>{if(selected.find(participant=>participant.personId===button.dataset.removeSelected)?.paymentId&&!window.confirm('Убрать клиента из списка? Созданная оплата или долг останется в CRM.'))return;selected=selected.filter(participant=>participant.personId!==button.dataset.removeSelected);paymentPersonId=null;update();});
+      dialog.querySelectorAll('[data-create-payment]').forEach(button=>button.onclick=()=>{paymentPersonId=button.dataset.createPayment;paymentProductId='';update();});
+      dialog.querySelector('#session-participant-add').disabled=Boolean(pending)||selected.length>=Number(form.capacity.value)||!personSelect.value;
+      renderPayment();
+    };
+    const renderPayment=()=>{
+      const unfinished=studio.pending.get('session-payment');
+      const panel=dialog.querySelector('#session-payment-panel');
+      if(unfinished){
+        panel.innerHTML=`<section class="note"><h3>Незавершённая оплата</h3><p>${e(studio.clientName(unfinished.personId))}. Повтор использует прежнюю дату и ключ. Сначала завершите оплату.</p><button type="button" id="session-payment-retry">Повторить оплату</button></section>`;
+        panel.querySelector('button').onclick=()=>savePayment(unfinished);
+        return;
+      }
+      if(!paymentPersonId){panel.innerHTML='';return;}
+      let draft;try{draft=sessionDraft();}catch{panel.innerHTML='<p>Укажите корректную дату и длительность тренировки.</p>';return;}
+      const products=sessionPaymentProducts(studio.data.products,draft);
+      if(!products.some(product=>product.id===paymentProductId))paymentProductId=products[0]?.id||'';
+      const completed=draft.status==='COMPLETED';
+      panel.innerHTML=`<section class="note"><h3>${e(studio.clientName(paymentPersonId))} · разовая оплата</h3>
+        <p>Дата тренировки: ${e(form.startsAt.value.slice(0,10))}. ${completed?'Полученная оплата будет записана в 00:00 этого дня по Москве.':'Будет создан долг; получение денег не подтверждается.'}</p>
+        ${field('session-payment-product','Разовая услуга',`<select id="session-payment-product">${products.map(product=>`<option value="${e(product.id)}">${e(product.name)} · ${e(currencyAmount(product.price))} ₽</option>`).join('')}</select>`)}
+        ${completed?`${field('session-payment-method','Способ оплаты','<select id="session-payment-method"><option value="SBP">СБП</option><option value="CASH">Наличные</option><option value="CARD">Карта</option></select>')}<label><input id="session-payment-received" type="checkbox"> Подтверждаю получение денег</label>`:''}
+        <p>Оплата сохраняется сразу и останется в CRM, если закрыть форму или убрать клиента.</p>
+        ${products.length?'':'<p>Нет активной разовой услуги для выбранных формата, длительности и даты.</p>'}
+        <button id="session-payment-confirm" type="button" ${!products.length||!['PLANNED','COMPLETED'].includes(draft.status)?'disabled':''}>${completed?'Подтвердить полученную оплату':'Создать долг'}</button>
+        <button id="session-payment-close" type="button">Закрыть оплату</button></section>`;
+      const productSelect=panel.querySelector('#session-payment-product');productSelect.value=paymentProductId;
+      productSelect.onchange=()=>{paymentProductId=productSelect.value;};
+      const methodSelect=panel.querySelector('#session-payment-method');
+      if(methodSelect){methodSelect.value=paymentMethod;methodSelect.onchange=()=>{paymentMethod=methodSelect.value;};}
+      panel.querySelector('#session-payment-close').onclick=()=>{paymentPersonId=null;update();};
+      panel.querySelector('#session-payment-confirm').onclick=()=>{
+        if(completed&&!panel.querySelector('#session-payment-received').checked)return studio.errorBox(new Error('Подтвердите получение денег.'),'#session-create-error');
+        savePayment({personId:paymentPersonId,productId:paymentProductId,...sessionDraft(),paymentMethod,idempotencyKey:createOperationId()});
+      };
+    };
+    const savePayment=async body=>{
+      if(studio.saving)return;
+      studio.saving=true;
+      const generation=studio.generation;
+      studio.pending.save('session-payment',body);
+      dialog.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);
+      try{
+        const result=await studio.api.request('/studio/sessions/payment',{method:'POST',body});
+        if(!result.success||!result.paymentId)throw new Error('CRM не подтвердила оплату. Повторите прежний запрос.');
+        const participant=selected.find(participant=>participant.personId===body.personId);
+        if(!participant)throw new Error('Проверьте список участников и оплату в CRM.');
+        Object.assign(participant,{paymentId:result.paymentId,productId:body.productId,paymentContext:sessionPaymentContext(body.personId,body.productId,body)});
+        this.creationDraft={...this.creationDraft,participants:selected};
+        studio.pending.save('session-draft',this.creationDraft);
+        studio.pending.clear('session-payment');paymentPersonId=null;const errorBox=dialog.querySelector('#session-create-error');if(errorBox)errorBox.hidden=true;
+      }catch(error){
+        if(error.status>=400&&error.status<500)studio.pending.clear('session-payment');
+        if(generation===studio.generation&&form.isConnected)studio.errorBox(error,'#session-create-error');
+      }finally{
+        studio.saving=false;
+        if(generation===studio.generation&&form.isConnected){
+          dialog.querySelectorAll('input,select,button').forEach(control=>control.disabled=false);
+          update();
+        }
+      }
     };
     const update=()=>{
       this.creationDraft={...Object.fromEntries(new FormData(form)),participants:selected};
+      studio.pending.save('session-draft',this.creationDraft);
       try{
+        const packageCount=selected.filter(participant=>participant.membershipId).length;
+        const singleCount=selected.length-packageCount;
         if(!pending)form.elements.name.value=sessionFormats.find(([format])=>format===form.sessionFormat.value)?.[1]||'';
         form.capacity.readOnly=form.sessionFormat.value==='PERSONAL_EQUIPMENT';
         const status=sessionTimeState(form.startsAt.value+':00+03:00',form.durationMinutes.value);
@@ -94,22 +161,26 @@ export class StudioCalendar {
         form.pastConfirmed.required=status==='COMPLETED';
         form.attendanceReason.required=status==='COMPLETED'&&selected.length>0;
         dialog.querySelector('#session-create-submit').textContent=status==='COMPLETED'?'Внести прошедшую тренировку':status==='PLANNED'?'Запланировать тренировку':'Сохранить текущую тренировку';
-        dialog.querySelector('#session-time-note').textContent=status==='COMPLETED'?`Прошедшая дата: выбранные участники считаются посетившими занятие. Будет списано по одному посещению: ${selected.length}.`:status==='PLANNED'?`Будущая дата: запланированное занятие. По одному посещению будет зарезервировано: ${selected.length}.`:'Занятие уже идёт: участников можно внести после его окончания.';
+        dialog.querySelector('#session-time-note').textContent=status==='COMPLETED'?`Прошедшая дата: выбранные участники считаются посетившими занятие. По пакетам будет списано посещений: ${packageCount}. Разовых участников: ${singleCount}.`:status==='PLANNED'?`Будущая дата: запланированное занятие. По пакетам будет зарезервировано посещений: ${packageCount}. Разовых участников: ${singleCount}.`:'Занятие уже идёт: участников можно внести после его окончания.';
       }catch(error){dialog.querySelector('#session-time-note').textContent=error.message;}
       renderPeople();
+      if(studio.pending.get('session-payment')){
+        form.querySelectorAll('input,select,button').forEach(control=>control.disabled=true);
+        const retry=dialog.querySelector('#session-payment-retry');if(retry)retry.disabled=false;
+      }
     };
     form.sessionFormat.onchange=()=>{form.capacity.value=form.sessionFormat.value==='PERSONAL_EQUIPMENT'?1:4;update();};
-    dialog.querySelector('#session-participant-add').onclick=()=>{if(selected.length>=Number(form.capacity.value)||!personSelect.value||!membershipSelect.value)return;selected.push({personId:personSelect.value,membershipId:membershipSelect.value});update();};
-    update();form.oninput=update;
+    dialog.querySelector('#session-participant-add').onclick=()=>{if(selected.length>=Number(form.capacity.value)||!personSelect.value)return;selected.push({personId:personSelect.value,...(membershipSelect.value?{membershipId:membershipSelect.value}:{})});update();};
+    update();form.oninput=event=>{if(!event.target.closest('#session-payment-panel'))update();};
     form.onsubmit=event=>{
       event.preventDefault();
       try{
         this.creationDraft={...Object.fromEntries(new FormData(form)),participants:selected};
         const body=sessionCreationPayload(this.creationDraft,createOperationId());
         if(body.sessionFormat==='PERSONAL_EQUIPMENT'&&(body.capacity!==1||selected.length>1))throw new Error('Персональная тренировка: только один клиент и одно место.');
-        if(selected.length>body.capacity||selected.some(participant=>!matching(participant.personId).some(membership=>membership.id===participant.membershipId)))throw new Error('Проверьте выбранных участников: вместимость или доступность пакетов изменилась.');
+        if(selected.length>body.capacity||selected.some(participant=>participant.membershipId?!matching(participant.personId).some(membership=>membership.id===participant.membershipId):!sessionPaymentMatches(participant,sessionDraft())))throw new Error('Проверьте участников: создайте разовую оплату клиентам без пакета; пакет или оплата должны соответствовать параметрам тренировки.');
         if(selected.length&&['CONFIRMED'].includes(body.status))throw new Error('Участники текущей тренировки вносятся после её окончания.');
-        this.send('session',{...body,participants:selected,attendanceReason:form.attendanceReason.value.trim()},'/studio/sessions/create');
+        this.send('session',{...body,participants:selected.map(({personId,membershipId,paymentId,productId})=>membershipId?{personId,membershipId}:{personId,paymentId,productId}),attendanceReason:form.attendanceReason.value.trim()},'/studio/sessions/create');
       }
       catch(error){studio.errorBox(error,'#session-create-error');}
     };
@@ -174,7 +245,7 @@ export class StudioCalendar {
       dialog.querySelectorAll('button,input,select').forEach(control=>control.disabled=true);
       const result=await studio.api.request(path,{method:'POST',body});
       studio.pending.clear(kind);studio.data=null;
-      if(kind==='session'){sessionId=result.classSessionId;this.week=weekStart(calendarDate(body.startsAt));this.creationDraft=null;}
+      if(kind==='session'){studio.pending.clear('session-draft');sessionId=result.classSessionId;this.week=weekStart(calendarDate(body.startsAt));this.creationDraft=null;}
       studio.notify(result.duplicate?'Операция уже выполнена. Данные обновлены из CRM.':kind==='session'?'Тренировка и событие создания сохранены в CRM.':kind==='booking'?'Клиент добавлен. Резерв и событие сохранены в CRM.':'Клиент убран. Возврат резерва и событие сохранены в CRM.');
     }catch(caught){error=caught;if(caught.status===422)studio.pending.clear(kind);}
     finally{

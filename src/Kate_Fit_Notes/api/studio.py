@@ -425,6 +425,32 @@ class SessionParticipantRequest(BaseModel):
     membership_id: UUID = Field(alias="membershipId")
 
 
+class SessionPaymentParticipantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID = Field(alias="personId")
+    payment_id: UUID = Field(alias="paymentId")
+    product_id: UUID = Field(alias="productId")
+
+
+class SessionPaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    person_id: UUID = Field(alias="personId")
+    product_id: UUID = Field(alias="productId")
+    session_format: Literal["GROUP_REFORMER", "INTRO_REFORMER", "PERSONAL_EQUIPMENT", "MAT_PILATES", "STRETCHING", "TRX"] = Field(alias="sessionFormat")
+    starts_at: datetime = Field(alias="startsAt")
+    duration_minutes: int = Field(alias="durationMinutes", ge=1, le=1440, strict=True)
+    status: Literal["PLANNED", "COMPLETED"]
+    payment_method: Literal["CASH", "SBP", "CARD"] = Field(alias="paymentMethod")
+    idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
+
+    @field_validator("starts_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("Укажите время с часовым поясом")
+        return value
+
+
 class CreateSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(default="", max_length=200)
@@ -435,7 +461,7 @@ class CreateSessionRequest(BaseModel):
     status: Literal["PLANNED", "CONFIRMED", "COMPLETED"]
     past_confirmed: bool = Field(default=False, alias="pastConfirmed", strict=True)
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
-    participants: list[SessionParticipantRequest] = Field(default_factory=list, max_length=100)
+    participants: list[SessionParticipantRequest | SessionPaymentParticipantRequest] = Field(default_factory=list, max_length=100)
     attendance_reason: str = Field(default="", alias="attendanceReason", max_length=2000)
 
     @field_validator("starts_at")
@@ -515,6 +541,12 @@ def confirm_package_payment(body: PackagePaymentRequest, username: str = Depends
 def create_booking(body: CreateBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     data = body.model_dump(mode="json", by_alias=True)
     return studio.perform_operation("bookings/create", data, username, lambda: studio.command("/studio/bookings/create", data))
+
+
+@router.post("/sessions/payment")
+def create_session_payment(body: SessionPaymentRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("sessions/payment", data, username, lambda: studio.command("/studio/sessions/payment", data))
 
 
 @router.post("/sessions/create")
