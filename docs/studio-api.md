@@ -130,3 +130,33 @@ PLAYWRIGHT_MODULE может указывать абсолютный путь к
 Браузерная проверка сетки/создания: npm --prefix ui run test:browser:sessions, параметры Playwright/локального UI как выше.
 
 После проверки CRM приложения на staging пересобрать отдельно KateFitNotes API (docker-compose.api.yml) и UI (docker-compose.ui.yml), сохранив действующие секреты/SQL-настройки. В Dokploy это Deploy соответствующих сервисов после сохранения Environment. Одного twenty apply недостаточно: он не обновляет контейнеры KateFitNotes.
+
+### Аналитика и расходы
+
+Авторизованный `GET /api/v1/studio/records/payments` читает `studioPayments`,
+`GET /api/v1/studio/records/expenses` — `studioExpenses`. Оба используют общий
+контракт `{items, next_cursor}` и query `cursor` без загрузки ограниченной первой
+страницы вместо полного набора.
+
+`POST /api/v1/studio/expenses/save`:
+
+```json
+{"name":"Аренда","amountMinor":"123456","category":"RENT","description":null,"costType":"FIXED","accrualMonth":"2026-10","paidOn":"2026-11-02"}
+```
+
+Для исправления передать также `expenseId` (UUID). Категории: `RENT`, `TRAINERS`,
+`MARKETING`, `FEES`, `SUPPLIES`, `TAXES`, `OTHER`; тип — `FIXED` или `VARIABLE`.
+Сумма — положительная строка целых копеек, до 12 цифр. `paidOn: null` означает
+неоплаченный расход. Ответ `{id}`. Сервер вызывает CRM save один раз: этот
+маршрут CRM не поддерживает ключ идемпотентности. При `502` с
+`detail.code: EXPENSE_OUTCOME_UNKNOWN` обязательно проверить журнал расходов CRM
+перед ручным повтором; автоматические повторы запрещены.
+
+`DELETE /api/v1/studio/expenses/{UUID}` проверяет запись и выполняет штатное
+мягкое удаление Twenty. Ответ `{id, deleted: true}`. Неизвестный результат
+удаления имеет тот же код и требует проверки списка до повтора.
+
+`POST /api/v1/studio/expenses/report` с `{ "month": "2026-10" }` возвращает
+авторизованный отчёт CRM: начисления, выплаты, постоянные/переменные расходы,
+категории и записи расходов. Денежные агрегаты передаются строками копеек;
+начисления и фактические выплаты относятся к независимым месяцам.

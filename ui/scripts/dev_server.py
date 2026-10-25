@@ -32,6 +32,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self.proxy()
         self.send_error(404)
 
+    def do_DELETE(self):
+        if self.path.startswith('/api/'):
+            return self.proxy()
+        self.send_error(404)
+
     def proxy(self):
         origin = os.environ.get('UI_API_ORIGIN', 'http://127.0.0.1:8000').rstrip('/')
         body = self.rfile.read(int(self.headers.get('Content-Length', 0))) if self.command in {'POST', 'PATCH'} else None

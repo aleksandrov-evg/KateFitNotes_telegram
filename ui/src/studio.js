@@ -1,6 +1,7 @@
 import {bindPhoneInput} from './phone-input.js';
 import {escapeHtml as e, money, normalizePhone} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
+import {StudioAnalytics} from './studio-analytics.js';
 import {setStudioSelectClients} from './studio-select.js';
 import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate, paymentStartOfMoscowDay} from './studio-domain.js';
 
@@ -29,16 +30,19 @@ export class StudioUi {
     Object.assign(this,{api,page,header,notify,errorBox,showDialog});
     this.pending = new PendingStudioOperation();
     this.calendar = new StudioCalendar(this);
+    this.analytics = new StudioAnalytics(this);
     this.data = null; this.generation = 0; this.saving = false;
   }
-  reset() { this.generation++; this.data=null; setStudioSelectClients([]); }
-  deactivate() { this.generation++; }
+  reset() { this.generation++; this.analytics.deactivate(); this.analytics.data=null; this.data=null; setStudioSelectClients([]); }
+  deactivate() { this.generation++; this.analytics.deactivate(); }
   clientName(id) { return studioPersonName(this.data.clients.find(person=>person.id===id)); }
   product(id) { return this.data.products.find(product=>product.id===id); }
   membership(id) { return this.data.packages.find(membership=>membership.id===id); }
   async render(route, force = false) {
     const run = ++this.generation;
     this.route = route;
+    if (route === 'analytics') return this.analytics.render(force);
+    this.analytics.deactivate();
     this.page(this.header('Студия Gelios','Данные и списания из Twenty CRM') + '<p role="status">Загружаем данные студии…</p>');
     try {
       if (!this.data || force) {
@@ -96,6 +100,8 @@ export class StudioUi {
         this.submit('client',body,'/studio/clients');
       } catch(error) { this.errorBox(error,'#studio-form-error'); }
     };
+    const requestedClient = new URLSearchParams(location.hash.split('?')[1] || '').get('client');
+    if (requestedClient && this.data.clients.some(client=>client.id===requestedClient)) this.clientDetails(requestedClient);
   }
   clientDetails(id) {
     const person=this.data.clients.find(client=>client.id===id);

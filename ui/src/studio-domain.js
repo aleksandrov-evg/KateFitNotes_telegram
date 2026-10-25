@@ -3,6 +3,7 @@ export const studioNav = [
   ['gelios/packages','Пакеты и оплата','wallet'], ['gelios/attendance','Внести тренировку','plus'],
   ['gelios/calendar','Календарь тренировок','calendar'],
   ['gelios/bookings','Посещения','calendar'], ['gelios/transactions','Журнал списаний','chart'],
+  ['gelios/analytics','Аналитика','chart'],
 ];
 
 export const studioPersonName = person => [person?.name?.firstName,person?.name?.lastName].filter(Boolean).join(' ') || 'Клиент без имени';

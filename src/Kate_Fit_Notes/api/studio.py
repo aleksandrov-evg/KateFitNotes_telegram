@@ -5,7 +5,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -159,7 +159,7 @@ class StudioCrm:
             raise failure from exc
 
     def list_records(self, resource: str, cursor: str | None = None) -> dict:
-        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents"}
+        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents", "payments": "studioPayments", "expenses": "studioExpenses"}
         object_name = objects[resource]
         params = {"limit": 100, "depth": 0}
         if cursor:
@@ -173,6 +173,41 @@ class StudioCrm:
         if page_info.get("hasNextPage") and (not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor):
             raise HTTPException(502, "CRM вернула некорректную страницу списка.")
         return {"items": items, "next_cursor": next_cursor}
+
+    def expense_write(self, method: str, path: str, body: dict | None = None) -> dict:
+        # CRM expense creation has no idempotency key: a lost response must never invite a blind retry.
+        try:
+            return self.request(method, path, body=body)
+        except HTTPException as exc:
+            if exc.status_code >= 500:
+                raise HTTPException(502, {"code": "EXPENSE_OUTCOME_UNKNOWN", "message": "Результат сохранения расхода неизвестен. Проверьте журнал расходов CRM перед повтором; автоматический повтор запрещён."}) from exc
+            raise
+
+    def save_expense(self, body: dict) -> dict:
+        result = self.expense_write("POST", "/s/studio/expenses/save", body)
+        operation = "updateStudioExpense" if body.get("expenseId") else "createStudioExpense"
+        record = result.get(operation)
+        try:
+            expense_id = str(UUID(record["id"])) if isinstance(record, dict) else None
+        except (ValueError, TypeError, KeyError):
+            expense_id = None
+        if not expense_id or body.get("expenseId") and expense_id != body["expenseId"]:
+            raise HTTPException(502, {"code": "EXPENSE_OUTCOME_UNKNOWN", "message": "Сохранение расхода не подтверждено. Проверьте журнал расходов CRM перед повтором."})
+        return {"id": expense_id}
+
+    def delete_expense(self, expense_id: UUID) -> dict:
+        record_id = str(expense_id)
+        result = self.request("GET", f"/rest/studioExpenses/{record_id}")
+        data = result.get("data")
+        record = data.get("studioExpense") if isinstance(data, dict) else None
+        if not isinstance(record, dict) or record.get("id") != record_id:
+            raise HTTPException(502, "Не удалось проверить расход перед удалением.")
+        result = self.expense_write("DELETE", f"/rest/studioExpenses/{record_id}")
+        data = result.get("data")
+        deleted = data.get("deleteStudioExpense") if isinstance(data, dict) else None
+        if not isinstance(deleted, dict) or deleted.get("id") != record_id:
+            raise HTTPException(502, {"code": "EXPENSE_OUTCOME_UNKNOWN", "message": "Удаление расхода не подтверждено. Проверьте журнал расходов CRM перед повтором."})
+        return {"id": record_id, "deleted": True}
 
     def rename_person(self, person_id: UUID, person: RenameClientRequest) -> dict:
         name = {"firstName": person.first_name, "lastName": person.last_name}
@@ -238,6 +273,48 @@ class StudioCrm:
             raise HTTPException(502, "Результат неизвестен. Повторите с прежним ключом клиента.")
         self.record_event(event)
         return {"id": created["id"], "duplicate": False}
+
+
+class ExpenseMonthRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+
+    @field_validator("month")
+    @classmethod
+    def validate_month(cls, value: str) -> str:
+        date.fromisoformat(value + "-01")
+        return value
+
+
+class ExpenseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expense_id: UUID | None = Field(default=None, alias="expenseId")
+    name: str = Field(min_length=1, max_length=200)
+    amount_minor: str = Field(alias="amountMinor", pattern=r"^[1-9][0-9]{0,11}$")
+    category: Literal["RENT", "TRAINERS", "MARKETING", "FEES", "SUPPLIES", "TAXES", "OTHER"]
+    description: str | None = Field(default=None, max_length=5000)
+    cost_type: Literal["FIXED", "VARIABLE"] = Field(alias="costType")
+    accrual_month: str = Field(alias="accrualMonth", pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+    paid_on: str | None = Field(alias="paidOn", pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Укажите название расхода")
+        return value.strip()
+
+    @field_validator("accrual_month")
+    @classmethod
+    def validate_month(cls, value: str) -> str:
+        return ExpenseMonthRequest.validate_month(value)
+
+    @field_validator("paid_on")
+    @classmethod
+    def validate_date(cls, value: str | None) -> str | None:
+        if value is not None:
+            date.fromisoformat(value)
+        return value
 
 
 class ClientRequest(BaseModel):
@@ -411,7 +488,7 @@ def record_past(body: AttendanceRequest, username: str = Depends(require_user), 
 
 
 @router.get("/records/{resource}")
-def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions", "events"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions", "events", "payments", "expenses"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     if cursor and len(cursor) > 2000:
         raise HTTPException(422, "Некорректный курсор.")
     return studio.list_records(resource, cursor)
@@ -450,3 +527,21 @@ def create_session(body: CreateSessionRequest, username: str = Depends(require_u
 def cancel_booking(body: CancelBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     data = body.model_dump(mode="json", by_alias=True)
     return studio.perform_operation("bookings/cancel", data, username, lambda: studio.command("/studio/bookings/cancel", data))
+
+
+@router.post("/expenses/save")
+def save_expense(body: ExpenseRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    data = body.model_dump(mode="json", by_alias=True)
+    if data["expenseId"] is None:
+        del data["expenseId"]
+    return studio.save_expense(data)
+
+
+@router.delete("/expenses/{expense_id}")
+def delete_expense(expense_id: UUID, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.delete_expense(expense_id)
+
+
+@router.post("/expenses/report")
+def expense_report(body: ExpenseMonthRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.request("POST", "/s/studio/expenses/report", body=body.model_dump())
