@@ -6,7 +6,7 @@ import hmac
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.Kate_Fit_Notes.api.deps import get_settings
@@ -47,7 +47,7 @@ def decode_access_token(token: str, secret: str) -> str:
 
 @router.post("/auth/login", response_model=TokenResponse)
 def login(
-    body: LoginRequest, settings: Settings | ApiSettings = Depends(get_settings)
+    body: LoginRequest, request: Request, settings: Settings | ApiSettings = Depends(get_settings)
 ) -> TokenResponse:
     user_ok = hmac.compare_digest(body.username, settings.api_user or "")
     password_ok = hmac.compare_digest(body.password, settings.api_password or "")
@@ -56,11 +56,13 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="неверный логин или пароль",
         )
+    request.state.audit_actor = body.username
     token = create_access_token(body.username, settings.api_jwt_secret or "")
     return TokenResponse(access_token=token)
 
 
 def require_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     settings: Settings | ApiSettings = Depends(get_settings),
 ) -> str:
@@ -69,4 +71,6 @@ def require_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="не авторизован",
         )
-    return decode_access_token(credentials.credentials, settings.api_jwt_secret or "")
+    username = decode_access_token(credentials.credentials, settings.api_jwt_secret or "")
+    request.state.audit_actor = username
+    return username

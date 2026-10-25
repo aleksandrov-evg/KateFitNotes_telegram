@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from src.Kate_Fit_Notes.api.auth import router as auth_router
 from src.Kate_Fit_Notes.api.routes import router as api_router
+from src.Kate_Fit_Notes.api.request_log import RequestLogMiddleware
 from src.Kate_Fit_Notes.api.schemas import HealthOut
 from src.Kate_Fit_Notes.api.studio import StudioCrm, load_studio_settings, router as studio_router
 from src.Kate_Fit_Notes.repository import KateFitRepository, PostgresRepository
@@ -55,6 +56,7 @@ def create_app(settings: Settings | ApiSettings, repository: KateFitRepository, 
                 studio_crm.close()
 
     app = FastAPI(title="Kate Fit Notes API", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(RequestLogMiddleware)
     app.state.studio_crm = studio_crm
     app.state.settings = settings
     app.state.repository = repository
