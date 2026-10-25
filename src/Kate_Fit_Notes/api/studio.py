@@ -5,7 +5,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -79,6 +79,7 @@ class StudioCrm:
                 method, f"{self.settings.base_url.rstrip('/')}{path}",
                 headers={"Authorization": f"Bearer {self.settings.api_key}"},
                 json=body, params=params,
+                **({"timeout": 65.0} if path == "/s/studio/sessions/create" else {}),
             )
         except httpx.HTTPError as exc:
             message = "Ответ CRM не получен. Повторите загрузку." if method == "GET" or body and body.get("previewOnly") else "Результат неизвестен. Проверьте историю и повторяйте только с прежним ключом операции."
@@ -159,7 +160,7 @@ class StudioCrm:
             raise failure from exc
 
     def list_records(self, resource: str, cursor: str | None = None) -> dict:
-        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents"}
+        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents", "payments": "studioPayments", "expenses": "studioExpenses"}
         object_name = objects[resource]
         params = {"limit": 100, "depth": 0}
         if cursor:
@@ -173,6 +174,71 @@ class StudioCrm:
         if page_info.get("hasNextPage") and (not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor):
             raise HTTPException(502, "CRM вернула некорректную страницу списка.")
         return {"items": items, "next_cursor": next_cursor}
+
+    def expense_write(self, method: str, path: str, body: dict | None = None) -> dict:
+        # CRM expense creation has no idempotency key: a lost response must never invite a blind retry.
+        try:
+            return self.request(method, path, body=body)
+        except HTTPException as exc:
+            if exc.status_code >= 500:
+                raise HTTPException(502, {"code": "EXPENSE_OUTCOME_UNKNOWN", "message": "Результат сохранения расхода неизвестен. Проверьте журнал расходов CRM перед повтором; автоматический повтор запрещён."}) from exc
+            raise
+
+    def save_expense(self, body: dict) -> dict:
+        result = self.expense_write("POST", "/s/studio/expenses/save", body)
+        operation = "updateStudioExpense" if body.get("expenseId") else "createStudioExpense"
+        record = result.get(operation)
+        try:
+            expense_id = str(UUID(record["id"])) if isinstance(record, dict) else None
+        except (ValueError, TypeError, KeyError):
+            expense_id = None
+        if not expense_id or body.get("expenseId") and expense_id != body["expenseId"]:
+            raise HTTPException(502, {"code": "EXPENSE_OUTCOME_UNKNOWN", "message": "Сохранение расхода не подтверждено. Проверьте журнал расходов CRM перед повтором."})
+        return {"id": expense_id}
+
+    def delete_expense(self, expense_id: UUID) -> dict:
+        record_id = str(expense_id)
+        result = self.request("GET", f"/rest/studioExpenses/{record_id}")
+        data = result.get("data")
+        record = data.get("studioExpense") if isinstance(data, dict) else None
+        if not isinstance(record, dict) or record.get("id") != record_id:
+            raise HTTPException(502, "Не удалось проверить расход перед удалением.")
+        result = self.expense_write("DELETE", f"/rest/studioExpenses/{record_id}")
+        data = result.get("data")
+        deleted = data.get("deleteStudioExpense") if isinstance(data, dict) else None
+        if not isinstance(deleted, dict) or deleted.get("id") != record_id:
+            raise HTTPException(502, {"code": "EXPENSE_OUTCOME_UNKNOWN", "message": "Удаление расхода не подтверждено. Проверьте журнал расходов CRM перед повтором."})
+        return {"id": record_id, "deleted": True}
+
+    def rename_person(self, person_id: UUID, person: RenameClientRequest) -> dict:
+        name = {"firstName": person.first_name, "lastName": person.last_name}
+        payload = {"name": name}
+        if person.email is not None:
+            current_data = self.request("GET", f"/rest/people/{person_id}").get("data")
+            current = current_data.get("person") if isinstance(current_data, dict) else None
+            if not isinstance(current, dict) or current.get("id") != str(person_id):
+                raise HTTPException(502, "Не удалось проверить контакт перед сохранением email.")
+            emails = current.get("emails") or {}
+            if not isinstance(emails, dict):
+                raise HTTPException(502, "CRM вернула некорректные email контакта.")
+            payload["emails"] = {**emails, "primaryEmail": person.email}
+        try:
+            result = self.request("PATCH", f"/rest/people/{person_id}", body=payload)
+        except HTTPException as exc:
+            if exc.status_code >= 500:
+                raise HTTPException(502, "Сохранение контакта не подтверждено. Обновите список клиентов и при необходимости повторите изменение.") from exc
+            raise
+        data = result.get("data")
+        updated = data.get("updatePerson") if isinstance(data, dict) else None
+        if not isinstance(updated, dict) or updated.get("id") != str(person_id) or updated.get("name") != name:
+            raise HTTPException(502, "Сохранение контакта не подтверждено. Обновите список клиентов и при необходимости повторите изменение.")
+        response = {"id": str(person_id), "name": name}
+        if person.email is not None:
+            emails = updated.get("emails")
+            if not isinstance(emails, dict) or emails.get("primaryEmail") != person.email:
+                raise HTTPException(502, "Сохранение email не подтверждено. Обновите список клиентов и проверьте карточку.")
+            response["emails"] = emails
+        return response
 
     def create_person(self, person: ClientRequest, username: str) -> dict:
         data = person.crm_data()
@@ -208,6 +274,48 @@ class StudioCrm:
             raise HTTPException(502, "Результат неизвестен. Повторите с прежним ключом клиента.")
         self.record_event(event)
         return {"id": created["id"], "duplicate": False}
+
+
+class ExpenseMonthRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    month: str = Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+
+    @field_validator("month")
+    @classmethod
+    def validate_month(cls, value: str) -> str:
+        date.fromisoformat(value + "-01")
+        return value
+
+
+class ExpenseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expense_id: UUID | None = Field(default=None, alias="expenseId")
+    name: str = Field(min_length=1, max_length=200)
+    amount_minor: str = Field(alias="amountMinor", pattern=r"^[1-9][0-9]{0,11}$")
+    category: Literal["RENT", "TRAINERS", "MARKETING", "FEES", "SUPPLIES", "TAXES", "OTHER"]
+    description: str | None = Field(default=None, max_length=5000)
+    cost_type: Literal["FIXED", "VARIABLE"] = Field(alias="costType")
+    accrual_month: str = Field(alias="accrualMonth", pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")
+    paid_on: str | None = Field(alias="paidOn", pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Укажите название расхода")
+        return value.strip()
+
+    @field_validator("accrual_month")
+    @classmethod
+    def validate_month(cls, value: str) -> str:
+        return ExpenseMonthRequest.validate_month(value)
+
+    @field_validator("paid_on")
+    @classmethod
+    def validate_date(cls, value: str | None) -> str | None:
+        if value is not None:
+            date.fromisoformat(value)
+        return value
 
 
 class ClientRequest(BaseModel):
@@ -249,6 +357,20 @@ class ClientRequest(BaseModel):
         if self.email:
             data["emails"] = {"primaryEmail": self.email}
         return data
+
+
+class RenameClientRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    first_name: str = Field(alias="firstName", min_length=1, max_length=100)
+    last_name: str = Field(alias="lastName", max_length=100)
+    email: str | None = Field(default=None, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        if value is None:
+            raise ValueError("Передайте email строкой или не передавайте поле")
+        return ClientRequest.validate_email(value)
 
 
 class PackagePaymentRequest(BaseModel):
@@ -304,6 +426,32 @@ class SessionParticipantRequest(BaseModel):
     membership_id: UUID = Field(alias="membershipId")
 
 
+class SessionPaymentParticipantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    person_id: UUID = Field(alias="personId")
+    payment_id: UUID = Field(alias="paymentId")
+    product_id: UUID = Field(alias="productId")
+
+
+class SessionPaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    person_id: UUID = Field(alias="personId")
+    product_id: UUID = Field(alias="productId")
+    session_format: Literal["GROUP_REFORMER", "INTRO_REFORMER", "PERSONAL_EQUIPMENT", "MAT_PILATES", "STRETCHING", "TRX"] = Field(alias="sessionFormat")
+    starts_at: datetime = Field(alias="startsAt")
+    duration_minutes: int = Field(alias="durationMinutes", ge=1, le=1440, strict=True)
+    status: Literal["PLANNED", "COMPLETED"]
+    payment_method: Literal["CASH", "SBP", "CARD"] = Field(alias="paymentMethod")
+    idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
+
+    @field_validator("starts_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("Укажите время с часовым поясом")
+        return value
+
+
 class CreateSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(default="", max_length=200)
@@ -314,7 +462,7 @@ class CreateSessionRequest(BaseModel):
     status: Literal["PLANNED", "CONFIRMED", "COMPLETED"]
     past_confirmed: bool = Field(default=False, alias="pastConfirmed", strict=True)
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
-    participants: list[SessionParticipantRequest] = Field(default_factory=list, max_length=100)
+    participants: list[SessionParticipantRequest | SessionPaymentParticipantRequest] = Field(default_factory=list, max_length=100)
     attendance_reason: str = Field(default="", alias="attendanceReason", max_length=2000)
 
     @field_validator("starts_at")
@@ -367,7 +515,7 @@ def record_past(body: AttendanceRequest, username: str = Depends(require_user), 
 
 
 @router.get("/records/{resource}")
-def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions", "events"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions", "events", "payments", "expenses"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     if cursor and len(cursor) > 2000:
         raise HTTPException(422, "Некорректный курсор.")
     return studio.list_records(resource, cursor)
@@ -377,6 +525,11 @@ def records(resource: Literal["clients", "products", "packages", "bookings", "se
 def create_client(body: ClientRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     data = body.model_dump(mode="json", by_alias=True)
     return studio.perform_operation("clients/create", data, username, lambda: studio.create_person(body, username))
+
+
+@router.patch("/clients/{person_id}")
+def rename_client(person_id: UUID, body: RenameClientRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.rename_person(person_id, body)
 
 
 @router.post("/package-payments/confirm")
@@ -391,6 +544,12 @@ def create_booking(body: CreateBookingRequest, username: str = Depends(require_u
     return studio.perform_operation("bookings/create", data, username, lambda: studio.command("/studio/bookings/create", data))
 
 
+@router.post("/sessions/payment")
+def create_session_payment(body: SessionPaymentRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("sessions/payment", data, username, lambda: studio.command("/studio/sessions/payment", data))
+
+
 @router.post("/sessions/create")
 def create_session(body: CreateSessionRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     data = body.model_dump(mode="json", by_alias=True)
@@ -401,3 +560,27 @@ def create_session(body: CreateSessionRequest, username: str = Depends(require_u
 def cancel_booking(body: CancelBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     data = body.model_dump(mode="json", by_alias=True)
     return studio.perform_operation("bookings/cancel", data, username, lambda: studio.command("/studio/bookings/cancel", data))
+
+
+@router.post("/expenses/save")
+def save_expense(body: ExpenseRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    data = body.model_dump(mode="json", by_alias=True)
+    if data["expenseId"] is None:
+        del data["expenseId"]
+    return studio.save_expense(data)
+
+
+@router.delete("/expenses/{expense_id}")
+def delete_expense(expense_id: UUID, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.delete_expense(expense_id)
+
+
+@router.post("/expenses/report")
+def expense_report(body: ExpenseMonthRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    return studio.request("POST", "/s/studio/expenses/report", body=body.model_dump())
+
+
+@router.post("/bookings/cancel-pay-as-you-go")
+def cancel_pay_as_you_go_booking(body: CancelBookingRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+    data = body.model_dump(mode="json", by_alias=True)
+    return studio.perform_operation("bookings/cancel-pay-as-you-go", data, username, lambda: studio.command("/studio/bookings/cancel-pay-as-you-go", data))

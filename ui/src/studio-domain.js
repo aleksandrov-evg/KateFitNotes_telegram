@@ -3,6 +3,7 @@ export const studioNav = [
   ['gelios/packages','Пакеты и оплата','wallet'], ['gelios/attendance','Внести тренировку','plus'],
   ['gelios/calendar','Календарь тренировок','calendar'],
   ['gelios/bookings','Посещения','calendar'], ['gelios/transactions','Журнал списаний','chart'],
+  ['gelios/analytics','Аналитика','chart'],
 ];
 
 export const studioPersonName = person => [person?.name?.firstName,person?.name?.lastName].filter(Boolean).join(' ') || 'Клиент без имени';
@@ -81,6 +82,22 @@ export const sessionMemberships = (packages, products, personId, session) => per
   const category=session.sessionFormat==='PERSONAL_EQUIPMENT'?'PERSONAL':'GROUP_PACKAGE';
   return session.sessionFormat!=='SPLIT_EQUIPMENT' && membership.status==='ACTIVE' && membership.visitsAvailable>0 && product?.category===category && product.sessionFormat===session.sessionFormat && membership.activatedAt && new Date(membership.activatedAt)<=new Date(session.startsAt) && (!membership.expiresOn || membership.expiresOn>=session.startsAt.slice(0,10)) && (session.status!=='COMPLETED' || product.durationMinutes===session.durationMinutes);
 });
+export const sessionCancellationPath = booking => relationId(booking,'membership')?'/studio/bookings/cancel':'/studio/bookings/cancel-pay-as-you-go';
+export const sessionPaymentProducts = (products, session) => products.filter(product => {
+  const day=calendarDate(session.startsAt);
+  return session.sessionFormat!=='SPLIT_EQUIPMENT' && product.isActive &&
+    product.category===(session.sessionFormat==='PERSONAL_EQUIPMENT'?'PERSONAL':'SINGLE') &&
+    (product.category!=='PERSONAL'||product.visitsIncluded===1) &&
+    product.sessionFormat===session.sessionFormat && product.durationMinutes===session.durationMinutes &&
+    (!product.validFrom||product.validFrom<=day) && (!product.validTo||product.validTo>=day) &&
+    currencyAmount(product.price)>0;
+});
+export const sessionPaymentContext = (personId, productId, session) => JSON.stringify({
+  personId,productId,sessionFormat:session.sessionFormat,startsAt:new Date(session.startsAt).toISOString(),
+  durationMinutes:session.durationMinutes,status:session.status,
+});
+export const sessionPaymentMatches = (participant, session) => Boolean(participant.paymentId) &&
+  participant.paymentContext===sessionPaymentContext(participant.personId,participant.productId,session);
 export const createOperationId = (cryptoProvider = globalThis.crypto) => {
   if (typeof cryptoProvider?.randomUUID === 'function') return cryptoProvider.randomUUID();
   if (typeof cryptoProvider?.getRandomValues !== 'function') throw new Error('Браузер не поддерживает безопасное создание ключа операции. Откройте UI через HTTPS или обновите браузер.');

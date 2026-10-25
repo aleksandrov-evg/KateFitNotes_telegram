@@ -22,7 +22,7 @@ def calendar_api():
         assert request.headers["authorization"] == "Bearer server-api-key"
         if request.url.path == "/rest/studioEvents":
             return httpx.Response(200, json={"data": {"studioEvents": [{"id": "event", "eventType": "BOOKING_CREATED"}]}, "pageInfo": {"hasNextPage": False}})
-        assert request.url.path in {"/s/studio/bookings/create", "/s/studio/bookings/cancel", "/s/studio/sessions/create"}
+        assert request.url.path in {"/s/studio/bookings/create", "/s/studio/bookings/cancel", "/s/studio/bookings/cancel-pay-as-you-go", "/s/studio/sessions/create", "/s/studio/sessions/payment"}
         return httpx.Response(200, json={"success": True, "duplicate": False})
     studio = StudioCrm(SETTINGS, httpx.Client(transport=httpx.MockTransport(handle)))
     with TestClient(create_app(API_SETTINGS, FakeApiRepo(), studio)) as browser:
@@ -30,7 +30,7 @@ def calendar_api():
         yield browser, requests, {"Authorization": f"Bearer {token}"}
 
 
-@pytest.mark.parametrize("path,body", [("create", BOOKING), ("cancel", CANCELLATION)])
+@pytest.mark.parametrize("path,body", [("create", BOOKING), ("cancel", CANCELLATION), ("cancel-pay-as-you-go", CANCELLATION)])
 def test_calendar_actions_use_domain_commands_and_stable_keys(calendar_api, path, body):
     browser, requests, headers = calendar_api
     assert browser.post(f"/api/v1/studio/bookings/{path}", json=body).status_code == 401
@@ -67,3 +67,20 @@ def test_session_body_validation_before_crm(calendar_api, change):
     browser, requests, headers = calendar_api
     assert browser.post("/api/v1/studio/sessions/create", json={**SESSION, **change}, headers=headers).status_code == 422
     assert requests == []
+
+
+def test_inline_session_payment_and_mixed_participants(calendar_api):
+    browser, requests, headers = calendar_api
+    payment = {key: value for key, value in SESSION.items() if key in {"sessionFormat", "startsAt", "durationMinutes", "status", "idempotencyKey"}}
+    payment.update(personId=BOOKING["personId"], productId="00000000-0000-4000-8000-000000000005", paymentMethod="SBP")
+    assert browser.post("/api/v1/studio/sessions/payment", json=payment).status_code == 401
+    assert browser.post("/api/v1/studio/sessions/payment", json=payment, headers=headers).status_code == 200
+    assert requests[-1].url.path == "/s/studio/sessions/payment"
+    assert json.loads(requests[-1].content)["startsAt"].endswith("+03:00")
+    participants = [{"personId": BOOKING["personId"], "membershipId": BOOKING["membershipId"]},
+                    {"personId": "00000000-0000-4000-8000-000000000006", "productId": payment["productId"], "paymentId": "00000000-0000-4000-8000-000000000007"}]
+    assert browser.post("/api/v1/studio/sessions/create", json={**SESSION, "participants": participants}, headers=headers).status_code == 200
+    assert json.loads(requests[-1].content)["participants"] == participants
+    for change in [{"startsAt": "2026-10-15T10:00:00"}, {"status": "CONFIRMED"}, {"amount": 1}]:
+        assert browser.post("/api/v1/studio/sessions/payment", json={**payment, **change}, headers=headers).status_code == 422
+    assert browser.post("/api/v1/studio/sessions/create", json={**SESSION, "participants": [{**participants[0], "paymentId": participants[1]["paymentId"]}]}, headers=headers).status_code == 422

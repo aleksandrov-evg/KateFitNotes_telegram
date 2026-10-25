@@ -1,6 +1,7 @@
 import {bindPhoneInput} from './phone-input.js';
 import {escapeHtml as e, money, normalizePhone} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
+import {StudioAnalytics} from './studio-analytics.js';
 import {setStudioSelectClients} from './studio-select.js';
 import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate, paymentStartOfMoscowDay} from './studio-domain.js';
 
@@ -29,16 +30,19 @@ export class StudioUi {
     Object.assign(this,{api,page,header,notify,errorBox,showDialog});
     this.pending = new PendingStudioOperation();
     this.calendar = new StudioCalendar(this);
+    this.analytics = new StudioAnalytics(this);
     this.data = null; this.generation = 0; this.saving = false;
   }
-  reset() { this.generation++; this.data=null; setStudioSelectClients([]); }
-  deactivate() { this.generation++; }
+  reset() { this.generation++; this.analytics.deactivate(); this.analytics.data=null; this.data=null; setStudioSelectClients([]); }
+  deactivate() { this.generation++; this.analytics.deactivate(); }
   clientName(id) { return studioPersonName(this.data.clients.find(person=>person.id===id)); }
   product(id) { return this.data.products.find(product=>product.id===id); }
   membership(id) { return this.data.packages.find(membership=>membership.id===id); }
   async render(route, force = false) {
     const run = ++this.generation;
     this.route = route;
+    if (route === 'analytics') return this.analytics.render(force);
+    this.analytics.deactivate();
     this.page(this.header('Студия Gelios','Данные и списания из Twenty CRM') + '<p role="status">Загружаем данные студии…</p>');
     try {
       if (!this.data || force) {
@@ -96,19 +100,65 @@ export class StudioUi {
         this.submit('client',body,'/studio/clients');
       } catch(error) { this.errorBox(error,'#studio-form-error'); }
     };
+    const requestedClient = new URLSearchParams(location.hash.split('?')[1] || '').get('client');
+    if (requestedClient && this.data.clients.some(client=>client.id===requestedClient)) this.clientDetails(requestedClient);
   }
   clientDetails(id) {
     const person=this.data.clients.find(client=>client.id===id);
+    if(!person)return;
     const packages=personPackages(this.data.packages,id);
-    this.showDialog(e(studioPersonName(person)),`<dl class="client-details"><dt>Телефон</dt><dd>${e(person.phones?.primaryPhoneNumber||'—')}</dd><dt>Email</dt><dd>${e(person.emails?.primaryEmail||'—')}</dd></dl><h3>Пакеты клиента</h3>${this.clientPackageCards(packages)}<div class="actions"><a class="button primary" href="#gelios/attendance?client=${encodeURIComponent(id)}">Внести тренировку</a><a class="button secondary" href="#gelios/packages?client=${encodeURIComponent(id)}">Оформить пакет</a></div>`);
+    this.showDialog(e(studioPersonName(person)),`<dl class="client-details"><dt>Телефон</dt><dd>${e(person.phones?.primaryPhoneNumber||'—')}</dd><dt>Email</dt><dd>${e(person.emails?.primaryEmail||'—')}</dd></dl><button id="studio-client-rename" type="button" class="secondary">Редактировать контакт</button><h3>Пакеты клиента</h3>${this.clientPackageCards(packages)}<div class="actions client-card-actions"><a class="button primary" href="#gelios/attendance?client=${encodeURIComponent(id)}">Внести тренировку</a><a class="button secondary" href="#gelios/packages?client=${encodeURIComponent(id)}">Оформить пакет</a></div>`);
+    document.querySelector('#studio-client-rename').onclick=()=>this.renameClient(id);
     document.querySelectorAll('#confirm a').forEach(link=>link.onclick=()=>document.querySelector('#confirm').close());
-    document.querySelectorAll('[data-package-visits]').forEach(button=>button.onclick=()=>this.packageVisits(button.dataset.packageVisits));
+  }
+  renameClient(id) {
+    const person=this.data.clients.find(client=>client.id===id);
+    if(!person)return;
+    const generation=this.generation, data=this.data;
+    this.showDialog('Редактировать контакт',`<form id="studio-rename-form">
+      ${field('Имя',`<input name="firstName" maxlength="100" required autocomplete="given-name" value="${e(person.name?.firstName||'')}">`)}
+      ${field('Фамилия',`<input name="lastName" maxlength="100" autocomplete="family-name" value="${e(person.name?.lastName||'')}">`)}
+      ${field('Email',`<input name="email" type="email" maxlength="254" autocomplete="email" placeholder="example@gmail.com" value="${e(person.emails?.primaryEmail||'')}">`)}
+      <button type="submit" hidden>Сохранить контакт</button>
+      </form>`,async()=>{
+      const form=document.querySelector('#studio-rename-form');
+      const body={firstName:form.elements.firstName.value.trim(),lastName:form.elements.lastName.value.trim(),email:form.elements.email.value.trim()};
+      if(!body.firstName)throw new Error('Укажите имя клиента.');
+      if(!form.reportValidity())throw new Error('Проверьте имя, фамилию и email клиента.');
+      if(this.saving)throw new Error('Дождитесь результата сохранения.');
+      this.saving=true;
+      form.querySelectorAll('input').forEach(input=>input.disabled=true);
+      try {
+        const result=await this.api.request(`/studio/clients/${encodeURIComponent(id)}`,{method:'PATCH',body});
+        if(result?.id!==id||result?.name?.firstName!==body.firstName||result?.name?.lastName!==body.lastName||result?.emails?.primaryEmail!==body.email)throw new Error('CRM не подтвердила изменения контакта. Обновите данные и проверьте карточку клиента.');
+        if(generation!==this.generation)return;
+        this.data=data;
+        person.name=result.name;
+        person.emails=result.emails;
+        setStudioSelectClients(data.clients);
+        await this.render(this.route);
+        this.notify('Контакт сохранён в CRM.');
+      } catch(error) {
+        if(!error.status||error.status>=500)this.data=null;
+        throw error;
+      } finally {
+        this.saving=false;
+        form.querySelectorAll('input').forEach(input=>input.disabled=false);
+      }
+    });
+    const dialog=document.querySelector('#confirm'),form=dialog.querySelector('#studio-rename-form');
+    dialog.querySelector('#dialog-submit').textContent='Сохранить';
+    form.onsubmit=event=>{event.preventDefault();dialog.querySelector('#dialog-submit').click();};
+    form.elements.firstName.focus();
   }
   clientPackageCards(packages) {
     if (!packages.length) return empty('У клиента пока нет пакетов.');
-    return `<div class="client-package-list">${packages.map(membership=>{
+    return `<div class="client-package-table" role="table"><div class="client-package-table-head" role="row"><span>Пакет</span><span>Доступно</span><span>Резерв</span><span>Использовано</span></div>${packages.map(membership=>{
       const visits=this.packageVisitsFor(membership.id);
-      return `<article class="client-package-card"><div class="client-package-heading"><div><strong>${e(membership.name)}</strong><small>${e(status(membership.status))}</small></div><span class="badge">${e(membership.visitsAvailable)} из ${e(membership.visitsGranted)}</span></div><dl><div><dt>В резерве</dt><dd>${e(membership.visitsReserved)}</dd></div><div><dt>Использовано</dt><dd>${e(membership.visitsConsumed)}</dd></div><div><dt>Действует до</dt><dd>${e(membership.expiresOn||'—')}</dd></div></dl><button class="secondary client-package-visits" type="button" data-package-visits="${e(membership.id)}">Посмотреть посещения${visits.length?` · ${e(visits.length)}`:''}</button></article>`;
+      return `<details class="client-package-row"><summary><span class="client-package-name" data-visits="${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}"><strong>${e(membership.name)}</strong><small>${e(status(membership.status))} · до ${e(membership.expiresOn||'без срока')}</small></span><span>${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}</span><span>${e(membership.visitsReserved)}</span><span>${e(membership.visitsConsumed)}</span><span class="client-package-expand">Развернуть</span></summary><div class="client-package-visits-panel">${visits.length?`<h4>Проведённые посещения</h4><div class="package-visits">${visits.map(({booking,session})=>{
+        const moment=visitMoment(session?.startsAt||booking.recordedAt);
+        return `<div class="package-visit"><time datetime="${e(session?.startsAt||booking.recordedAt||'')}">${e(moment.day)}</time><strong>${e(moment.time)}</strong><span>${e(session?.name||'Тренировка')}</span></div>`;
+      }).join('')}</div>`:empty('В рамках этого пакета ещё нет проведённых посещений.')}</div></details>`;
     }).join('')}</div>`;
   }
   packageVisitsFor(membershipId) {
@@ -116,15 +166,6 @@ export class StudioUi {
       .filter(booking=>relationId(booking,'membership')===membershipId&&booking.status==='ATTENDED')
       .map(booking=>({booking,session:this.data.sessions.find(session=>session.id===relationId(booking,'classSession'))}))
       .sort((left,right)=>String(right.session?.startsAt||right.booking.recordedAt).localeCompare(String(left.session?.startsAt||left.booking.recordedAt)));
-  }
-  packageVisits(id) {
-    const membership=this.membership(id);
-    if (!membership) return;
-    const visits=this.packageVisitsFor(id);
-    this.showDialog(`Посещения · ${e(membership.name)}`,visits.length?`<div class="package-visits">${visits.map(({booking,session})=>{
-      const moment=visitMoment(session?.startsAt||booking.recordedAt);
-      return `<div class="package-visit"><time datetime="${e(session?.startsAt||booking.recordedAt||'')}">${e(moment.day)}</time><strong>${e(moment.time)}</strong><span>${e(session?.name||'Тренировка')}</span></div>`;
-    }).join('')}</div>`:empty('В рамках этого пакета ещё нет проведённых посещений.'));
   }
   packageTable(packages) {
     return table(['Клиент / пакет','Доступно','Резерв','Использовано','До','Статус'],packages.map(membership=>`<tr><td>${e(this.clientName(relationId(membership,'person')))}<small class="studio-subline">${e(membership.name)}</small></td><td>${e(membership.visitsAvailable)} / ${e(membership.visitsGranted)}</td><td>${e(membership.visitsReserved)}</td><td>${e(membership.visitsConsumed)}</td><td>${e(membership.expiresOn||'—')}</td><td><span class="badge">${e(status(membership.status))}</span></td></tr>`));

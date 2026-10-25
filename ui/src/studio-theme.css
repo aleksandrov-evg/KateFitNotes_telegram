@@ -146,23 +146,31 @@
 .studio-mode dialog > .dialog-actions { flex-shrink: 0; padding: 16px 24px; margin: 0 16px; }
 .studio-mode .client-details { grid-template-columns: minmax(76px, auto) minmax(0, 1fr); }
 .studio-mode .client-details dd { min-width: 0; overflow-wrap: anywhere; }
-.studio-mode .client-package-list { display: grid; gap: 12px; min-width: 0; }
-.studio-mode .client-package-card { min-width: 0; padding: 16px; border: 1px solid #eedfe3; border-radius: 12px; background: #fffafb; }
-.studio-mode .client-package-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
-.studio-mode .client-package-heading > div { min-width: 0; }
-.studio-mode .client-package-heading strong, .studio-mode .client-package-heading small { display: block; overflow-wrap: anywhere; }
-.studio-mode .client-package-heading small { margin-top: 4px; color: #7a6269; font-size: 11px; }
-.studio-mode .client-package-heading .badge { flex-shrink: 0; white-space: nowrap; }
-.studio-mode .client-package-card dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
-.studio-mode .client-package-card dl div { min-width: 0; }
-.studio-mode .client-package-card dt { color: #7a6269; font-size: 11px; }
-.studio-mode .client-package-card dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 13px; }
-.studio-mode .client-package-visits { width: 100%; }
+.studio-mode .client-package-table { min-width: 0; border: 1px solid #eedfe3; border-radius: 12px; overflow: hidden; }
+.studio-mode .client-package-table-head, .studio-mode .client-package-row > summary { display: grid; grid-template-columns: minmax(150px, 2fr) repeat(3, minmax(62px, 1fr)); gap: 12px; align-items: center; }
+.studio-mode .client-package-table-head { padding: 11px 16px; background: #fcf7f8; color: #7a6269; font-size: 10px; }
+.studio-mode .client-package-row { min-width: 0; border-top: 1px solid #f0e4e8; background: #fff; }
+.studio-mode .client-package-row:first-of-type { border-top: 0; }
+.studio-mode .client-package-row > summary { min-height: 66px; padding: 12px 16px; cursor: pointer; list-style: none; font-size: 12px; }
+.studio-mode .client-package-row > summary::-webkit-details-marker { display: none; }
+.studio-mode .client-package-row > summary:hover { background: #fff9fb; }
+.studio-mode .client-package-row > summary:focus-visible { outline: 2px solid #00a991; outline-offset: -2px; }
+.studio-mode .client-package-name { min-width: 0; }
+.studio-mode .client-package-name strong, .studio-mode .client-package-name small { display: block; overflow-wrap: anywhere; }
+.studio-mode .client-package-name small { margin-top: 4px; color: #7a6269; font-size: 10px; }
+.studio-mode .client-package-expand { grid-column: 1 / -1; justify-self: start; display: inline-flex; align-items: center; min-height: 30px; padding: 5px 10px; border: 1px solid #e8d5dc; border-radius: 7px; color: #b85160; font-weight: 600; white-space: nowrap; }
+.studio-mode .client-package-row > summary:hover .client-package-expand { background: #fdf0f2; }
+.studio-mode .client-package-expand::after { content: '⌄'; display: inline-block; margin-left: 6px; transition: transform .15s ease; }
+.studio-mode .client-package-row[open] .client-package-expand::after { transform: rotate(180deg); }
+.studio-mode .client-package-visits-panel { padding: 4px 16px 16px; background: #fffafb; border-top: 1px solid #f0e4e8; }
+.studio-mode .client-package-visits-panel h4 { margin: 12px 0 8px; font-size: 12px; }
 .studio-mode .package-visits { display: grid; gap: 8px; }
 .studio-mode .package-visit { display: grid; grid-template-columns: 92px 48px minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0e4e8; font-size: 13px; }
 .studio-mode .package-visit:last-child { border-bottom: 0; }
 .studio-mode .package-visit time { color: #7a6269; }
 .studio-mode .package-visit span { min-width: 0; overflow-wrap: anywhere; }
+.studio-mode .client-card-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eedfe3; }
+.studio-mode .client-card-actions .button { flex: 1 1 180px; justify-content: center; }
 .studio-mode .calendar-session-details { display: grid; gap: 28px; }
 .studio-mode .calendar-session-details section { min-width: 0; }
 .studio-mode .calendar-session-details h3 { margin: 0 0 14px; }
@@ -219,7 +227,12 @@
   .studio-mode .studio-dialog-body { padding: 4px 14px 20px; }
   .studio-mode dialog > .dialog-actions { padding: 14px 8px; margin: 0 8px; }
   .studio-mode dialog h2 { font-size: 20px; }
-  .studio-mode .client-package-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .studio-mode .client-package-table-head { display: none; }
+  .studio-mode .client-package-row > summary { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+  .studio-mode .client-package-row > summary > span:not(.client-package-name):not(.client-package-expand) { display: none; }
+  .studio-mode .client-package-name::after { content: 'Доступно: ' attr(data-visits); display: block; margin-top: 4px; color: #7a6269; font-size: 10px; }
+  .studio-mode .client-package-expand { grid-column: auto; justify-self: end; }
   .studio-mode .package-visit { grid-template-columns: 88px 44px minmax(0, 1fr); gap: 8px; }
+  .studio-mode .client-card-actions { display: grid; grid-template-columns: 1fr; }
   .studio-mode .calendar-dialog .two-fields { grid-template-columns: 1fr; }
 }
