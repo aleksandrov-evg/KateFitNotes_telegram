@@ -79,6 +79,7 @@ class StudioCrm:
                 method, f"{self.settings.base_url.rstrip('/')}{path}",
                 headers={"Authorization": f"Bearer {self.settings.api_key}"},
                 json=body, params=params,
+                **({"timeout": 65.0} if path == "/s/studio/sessions/create" else {}),
             )
         except httpx.HTTPError as exc:
             message = "Ответ CRM не получен. Повторите загрузку." if method == "GET" or body and body.get("previewOnly") else "Результат неизвестен. Проверьте историю и повторяйте только с прежним ключом операции."
