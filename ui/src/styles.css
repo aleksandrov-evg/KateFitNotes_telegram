@@ -18,3 +18,7 @@
 @media(max-width:640px){.calendar-time-scroll{max-height:620px}.calendar-time-head,.calendar-time-body{min-width:924px;grid-template-columns:56px repeat(7,124px)}.studio-calendar .week-toolbar h2{width:100%}}
 
 .stage-banner{display:none}
+
+.calendar-grid-event .calendar-event-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;min-width:0;line-height:12px;flex-shrink:0}.calendar-event-meta time{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.calendar-event-meta small{flex-shrink:0;font-weight:500}.calendar-grid-event strong{display:block;width:100%;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;line-height:14px}.calendar-grid-event.is-compact .calendar-event-meta{display:none}
+
+.calendar-time-axis span:nth-child(even),.calendar-free-slot:nth-child(even){border-bottom-color:#cbbbc1}.calendar-time-axis span:nth-child(odd){font-weight:600;color:var(--text)}
