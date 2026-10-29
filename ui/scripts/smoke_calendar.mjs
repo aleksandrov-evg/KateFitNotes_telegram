@@ -11,7 +11,7 @@ const page=await browser.newPage({viewport:{width:1440,height:1000}});
 page.setDefaultTimeout(8000);
 const errors=[];page.on('pageerror',error=>errors.push(error.message));
 const personId='00000000-0000-4000-8000-000000000001',membershipId='00000000-0000-4000-8000-000000000002',productId='00000000-0000-4000-8000-000000000003',sessionId='00000000-0000-4000-8000-000000000004';
-const startsAt=new Date(Date.now()+86400000).toISOString();
+const startsAt=new Date(calendarDate(new Date(Date.now()+86400000))+'T10:00:00+03:00').toISOString();
 const data={
   clients:[{id:personId,name:{firstName:'Анна',lastName:'Календарная'}}],
   products:[{id:productId,category:'GROUP_PACKAGE',sessionFormat:'GROUP_REFORMER'}],
@@ -50,12 +50,32 @@ await page.route('**/api/v1/**',async route=>{
   }
   throw new Error('Unexpected API path '+path);
 });
+for(const [id,name,start,end,status] of [
+  ['long-name','Персональное занятие на оборудовании с очень длинным названием','12:15','13:10','CANCELLED_BY_STUDIO'],
+  ['short-session','Короткая тренировка','14:00','14:30','PLANNED'],
+])data.sessions.push({...data.sessions[0],id,name,startsAt:calendarDate(startsAt)+'T'+start+':00+03:00',endsAt:calendarDate(startsAt)+'T'+end+':00+03:00',status});
 await page.addInitScript(()=>sessionStorage.setItem('katefit-token','test-session'));
 page.on('dialog',dialog=>dialog.accept());
 try{
   await page.goto((process.env.UI_SMOKE_URL||'http://127.0.0.1:5184/')+'#gelios/calendar');
   await page.getByRole('heading',{name:'Календарь тренировок',exact:true}).waitFor();
   if(weekStart(calendarDate(startsAt))!==weekStart(today()))await page.getByRole('button',{name:'Неделя →',exact:true}).click();
+  const slots=page.locator('.calendar-time-day').first().locator('[data-calendar-slot]');
+  assert.equal(await slots.count(),28);
+  assert.ok((await slots.first().getAttribute('data-calendar-slot')).endsWith('T08:00'));
+  assert.ok((await slots.last().getAttribute('data-calendar-slot')).endsWith('T21:30'));
+  assert.equal((await slots.first().boundingBox()).height,24);
+  assert.equal((await page.locator('.calendar-time-day').first().boundingBox()).height,672);
+  for(const card of await page.locator('.calendar-grid-event').all()){
+    assert.ok(await card.getAttribute('title'));
+    const bounds=await card.boundingBox();
+    const title=await card.locator('strong').boundingBox();
+    assert.ok(title.y+title.height<=bounds.y+bounds.height);
+    if(!await card.evaluate(element=>element.classList.contains('is-compact'))){
+      const meta=await card.locator('.calendar-event-meta').boundingBox();
+      assert.ok(meta.y+meta.height<=title.y);
+    }
+  }
   await page.screenshot({path:join(tmpdir(),'gelios-calendar-desktop.png'),fullPage:true});
   await page.getByRole('button',{name:/Реформер · календарь/}).click();
   const modal=page.locator('#confirm');

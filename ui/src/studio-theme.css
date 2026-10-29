@@ -1,4 +1,4 @@
-/* Gelios V2 is isolated from the existing Terfit workspace. */
+/* Workspace navigation is shared; page styles stay scoped to Gelios. */
 .studio-mode {
   --accent: #b85160;
   --soft: #fdf0f2;
@@ -7,27 +7,50 @@
   color: #3b292e;
   background: #fcf7f8;
 }
-.studio-shell { background: #fcf7f8; grid-template-columns: 232px minmax(0, 1fr); }
-.studio-shell .sidebar {
-  background: #3b242b;
-  color: #fff7f9;
+.app-shell {
+  --sidebar-background: #f8f8f8;
+  --sidebar-text: #1a1a1a;
+  --sidebar-muted: #6b6b6b;
+  --sidebar-link: #6b6b6b;
+  --sidebar-control: #fff;
+  --sidebar-border: #ddd;
+  --sidebar-hover: #fdf0f2;
+  --sidebar-active: #b85160;
+  --sidebar-account: #f0f0f0;
+  grid-template-columns: 232px minmax(0, 1fr);
+}
+.studio-shell {
+  --sidebar-background: #3b242b;
+  --sidebar-text: #fff7f9;
+  --sidebar-muted: #d4b5bd;
+  --sidebar-link: #ead3da;
+  --sidebar-control: #52313b;
+  --sidebar-border: #79545f;
+  --sidebar-hover: #ffffff0d;
+  --sidebar-active: #ffffff18;
+  --sidebar-account: #ffffff0d;
+  background: #fcf7f8;
+}
+.app-shell .sidebar {
+  background: var(--sidebar-background);
+  color: var(--sidebar-text);
   border: 0;
   padding: 28px 16px 24px;
   gap: 24px;
   overflow-y: auto;
 }
-.studio-shell .sidebar .brand { font-size: 20px; padding: 0 8px; letter-spacing: -.5px; }
-.studio-shell .sidebar .brand span { color: #d4b5bd; font-size: 10px; margin-top: 6px; }
-.studio-shell .workspace-switch { margin: 0; color: #d4b5bd; font-size: 11px; }
-.studio-shell .workspace-switch select { background: #52313b; border-color: #79545f; color: #fff7f9; font-size: 12px; }
-.studio-shell .sidebar nav { gap: 8px; }
-.studio-shell .nav-item { min-height: 44px; padding: 12px; border-radius: 8px; font-size: 12px; color: #ead3da; }
-.studio-shell .nav-item svg { flex-shrink: 0; width: 18px; height: 18px; }
-.studio-shell .nav-item:hover { background: #ffffff0d; }
-.studio-shell .nav-item.active { background: #ffffff18; color: #fff; border-left: 0; }
-.studio-shell .account { padding: 12px; border-radius: 12px; background: #ffffff0d; font-size: 12px; }
-.studio-shell .account small { color: #d4b5bd; font-size: 10px; }
-.studio-shell .account .icon-button { color: #ead3da; }
+.app-shell .sidebar .brand { font-size: 20px; padding: 0 8px; letter-spacing: -.5px; }
+.app-shell .sidebar .brand span { color: var(--sidebar-muted); font-size: 10px; margin-top: 6px; }
+.app-shell .workspace-switch { margin: 0; color: var(--sidebar-muted); font-size: 11px; }
+.app-shell .workspace-switch select { background: var(--sidebar-control); border-color: var(--sidebar-border); color: var(--sidebar-text); font-size: 12px; }
+.app-shell .sidebar nav { gap: 8px; }
+.app-shell .nav-item { min-height: 44px; padding: 12px; border-radius: 8px; font-size: 12px; color: var(--sidebar-link); }
+.app-shell .nav-item svg { flex-shrink: 0; width: 18px; height: 18px; }
+.app-shell .nav-item:hover { background: var(--sidebar-hover); }
+.app-shell .nav-item.active { background: var(--sidebar-active); color: #fff; border-left: 0; }
+.app-shell .account { padding: 12px; border-radius: 12px; background: var(--sidebar-account); font-size: 12px; }
+.app-shell .account small { color: var(--sidebar-muted); font-size: 10px; }
+.app-shell .account .icon-button { color: var(--sidebar-link); }
 .studio-shell #main { padding: 40px 48px; max-width: 1680px; }
 .studio-shell .page-header { margin-bottom: 28px; gap: 24px; align-items: center; }
 .studio-shell .page-header > div:first-child { min-width: 0; }
@@ -95,15 +118,21 @@
 .studio-package-list { margin-top: 28px; }
 .studio-shell .section-header select { width: auto; max-width: 220px; }
 .studio-shell .section-header h2 { margin: 0; }
-.studio-shell .studio-calendar .week-toolbar { align-items: center; flex-direction: row; }
+.studio-shell .panel.studio-calendar { padding: 16px 20px 20px; }
+.studio-shell .studio-calendar .week-toolbar { align-items: center; flex-direction: row; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+.studio-shell .studio-calendar .week-toolbar h2 { margin: 0; }
+.calendar-week-summary { display: grid; gap: 3px; min-width: 0; }
+.calendar-week-summary .muted { font-size: 11px; line-height: 1.4; }
 .studio-shell .week-toolbar button { min-height: 36px; padding: 8px 12px; }
 .studio-shell .calendar-time-scroll { border-radius: 10px; }
-.studio-shell .calendar-free-slot { border-radius: 0; padding: 0; height: 48px; min-height: 48px; }
-.studio-shell .studio-calendar > .muted { margin-bottom: 16px; }
+.studio-shell .calendar-free-slot { border-radius: 0; padding: 0; height: 24px; min-height: 24px; }
 .studio-shell .calendar-free-slot:hover { background: #fff7f9; }
-.studio-shell .calendar-grid-event { background: #fbe9ee; border-color: #e2b4c0; color: #3b292e; border-radius: 7px; min-height: 0; padding: 4px 5px; gap: 3px; }
+.studio-shell .calendar-grid-event { background: #fbe9ee; border-color: #e2b4c0; color: #3b292e; border-radius: 5px; min-height: 0; padding: 4px 6px; gap: 2px; border-left-width: 3px; }
 .studio-shell .calendar-grid-event.is-completed { background: #f3edef; border-color: #e5d6dc; }
-.studio-shell .calendar-grid-event.is-cancelled { background: #f2f2f2; border-color: #ddd; }
+.studio-shell .calendar-grid-event.is-cancelled { background: #f6f6f6; border-color: #ddd; color: #776d70; }
+.studio-shell .calendar-grid-event:hover { filter: brightness(.97); }
+.studio-shell .calendar-grid-event:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.studio-shell .calendar-grid-event.is-compact { padding-top: 3px; padding-bottom: 3px; }
 .studio-mode dialog { width: min(640px, calc(100vw - 40px)); max-width: 640px; border: 1px solid #eedfe3; border-radius: 18px; padding: 32px; color: #3b292e; max-height: 90dvh; overflow: auto; }
 .studio-mode dialog::backdrop { background: #351e2780; backdrop-filter: blur(3px); }
 .studio-mode dialog h2 { font-size: 22px; letter-spacing: -.4px; margin-bottom: 24px; }
@@ -138,8 +167,8 @@
 .studio-select-menu small { font-size: 11px; margin-top: 3px; color: #7a6269; }
 .studio-select-menu p { padding: 16px 12px; color: #7a6269; font-size: 13px; }
 .studio-shell .section-header .studio-select { width: 180px; }
-.studio-shell .workspace-switch .studio-select > button { background: #52313b; color: #fff; border-color: #79545f; font-size: 12px; }
-.studio-shell .workspace-switch .studio-select-menu { color: #3b292e; }
+.app-shell .workspace-switch .studio-select > button { background: var(--sidebar-control); color: var(--sidebar-text); border-color: var(--sidebar-border); font-size: 12px; }
+.app-shell .workspace-switch .studio-select-menu { color: #3b292e; }
 .studio-mode dialog[open] { display: flex; flex-direction: column; padding: 8px; max-height: calc(100dvh - 48px); overflow: hidden; }
 .studio-mode dialog > #dialog-title { flex-shrink: 0; margin: 0; padding: 20px 24px; }
 .studio-mode .studio-dialog-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 24px 20px; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #d5b9c2 transparent; }
@@ -192,7 +221,7 @@
   .studio-shell .metric { padding: 18px; }
 }
 @media (max-width: 1000px) {
-  .studio-shell { grid-template-columns: 208px minmax(0, 1fr); }
+  .app-shell { grid-template-columns: 208px minmax(0, 1fr); }
   .studio-shell #main { padding: 28px 24px; }
   .studio-shell .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .studio-payment-layout, .studio-shell .clients-grid, .studio-shell .booking-grid, .studio-shell .overview-grid { grid-template-columns: 1fr; }
@@ -200,10 +229,10 @@
 }
 @media (max-width: 640px) {
   .studio-shell { display: block; }
-  .studio-shell .mobile-header { background: #3b242b; border: 0; color: #fff; height: 64px; }
-  .studio-shell .mobile-header .brand { font-size: 18px; letter-spacing: -.4px; }
-  .studio-shell .mobile-header .icon-button { background: #ffffff18; color: #fff; }
-  .studio-shell.menu-open .sidebar { top: 64px; height: calc(100dvh - 64px); background: #3b242b; width: min(320px, 100vw); padding: 24px 16px; box-shadow: 40px 0 100px #351e2760; }
+  .app-shell .mobile-header { background: var(--sidebar-background); border: 0; color: var(--sidebar-text); height: 64px; }
+  .app-shell .mobile-header .brand { font-size: 18px; letter-spacing: -.4px; }
+  .app-shell .mobile-header .icon-button { background: var(--sidebar-account); color: var(--sidebar-text); }
+  .app-shell.menu-open .sidebar { top: 64px; height: calc(100dvh - 64px); background: var(--sidebar-background); width: min(320px, 100vw); padding: 24px 16px; box-shadow: 40px 0 100px #351e2760; }
   .studio-shell #main { padding: 24px 16px 40px; }
   .studio-shell h1 { font-size: 24px; }
   .studio-shell .page-header { margin-bottom: 24px; }

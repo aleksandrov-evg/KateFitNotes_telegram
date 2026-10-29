@@ -91,6 +91,24 @@ try{
   await page.getByRole('heading',{name:'Обзор',exact:true}).waitFor();
   assert.equal(await page.evaluate(()=>document.body.classList.contains('studio-mode')),false);
   assert.equal(await page.locator('.sidebar').evaluate(element=>getComputedStyle(element).backgroundColor),'rgb(248, 248, 248)');
+  assert.equal((await page.locator('.sidebar').boundingBox()).width,232);
+  const workspace=page.getByRole('combobox',{name:'Рабочее пространство',exact:true});
+  await workspace.click();
+  await page.getByRole('option',{name:'Студия Gelios · CRM',exact:true}).waitFor();
+  await page.screenshot({path:join(artifacts,'terfit-workspace-menu.png')});
+  await workspace.press('Escape');
+  assert.equal(await workspace.getAttribute('aria-expanded'),'false');
+  await chooseOption(workspace,'gelios');
+  await page.getByRole('heading',{name:'Обзор Gelios',exact:true}).waitFor();
+  await chooseOption(page.getByRole('combobox',{name:'Рабочее пространство',exact:true}),'terfit');
+  await page.getByRole('heading',{name:'Обзор',exact:true}).waitFor();
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'Открыть меню',exact:true}).click();
+  await noPageOverflow();
+  assert.equal(await page.locator('.sidebar').evaluate(element=>getComputedStyle(element).backgroundColor),'rgb(248, 248, 248)');
+  await page.getByRole('combobox',{name:'Рабочее пространство',exact:true}).click();
+  await page.getByRole('option',{name:'Студия Gelios · CRM',exact:true}).waitFor();
+  await page.screenshot({path:join(artifacts,'terfit-workspace-menu-mobile.png')});
   assert.deepEqual(errors,[]);
-  console.log('PASS: seven Gelios screens at desktop/mobile sizes, payment summary, calendar dialog, original Terfit theme; no horizontal overflow or browser errors.');
+  console.log('PASS: seven Gelios screens at desktop/mobile sizes, payment summary, calendar dialog, shared workspace navigation and switching; no horizontal overflow or browser errors.');
 }finally{await browser.close();}

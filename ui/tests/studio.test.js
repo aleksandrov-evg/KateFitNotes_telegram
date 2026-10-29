@@ -68,15 +68,37 @@ test('создание будущего и прошедшего занятия �
   assert.equal(sessionCreationPayload({...values,startsAt:'2026-10-13T10:00',pastConfirmed:'on'},'stable',now).status,'COMPLETED');
   assert.equal(sessionTimeState('2026-10-14T11:30:00Z',60,now),'CONFIRMED');
 });
+test('создание ограничено часами 08:00–22:00 по Москве с учётом длительности',()=>{
+  const now=new Date('2026-10-14T00:00:00Z');
+  const values={sessionFormat:'GROUP_REFORMER',startsAt:'2026-10-15T08:00',durationMinutes:'55',capacity:'4'};
+  assert.equal(sessionCreationPayload(values,'opening',now).status,'PLANNED');
+  assert.equal(sessionCreationPayload({...values,startsAt:'2026-10-15T21:05'},'closing',now).status,'PLANNED');
+  for(const startsAt of ['2026-10-15T07:59','2026-10-15T21:06','2026-10-15T22:00','2026-10-15T23:30']){
+    assert.throws(()=>sessionCreationPayload({...values,startsAt},'outside',now),/08:00.*22:00/);
+  }
+  assert.throws(()=>sessionCreationPayload({...values,startsAt:'2026-10-15T21:00',durationMinutes:'180'},'overnight',now),/08:00.*22:00/);
+  assert.equal(sessionTimeState('2026-10-15T05:00:00Z',55,now),'PLANNED');
+  assert.throws(()=>sessionTimeState('2026-10-15T04:59:00Z',55,now),/08:00.*22:00/);
+});
+test('сетка обрезает старые тренировки по границам 08:00–22:00',()=>{
+  const intervals=calendarSessionLayout([
+    {id:'early',startsAt:'2026-10-14T07:00:00+03:00',endsAt:'2026-10-14T08:00:00+03:00'},
+    {id:'late',startsAt:'2026-10-14T22:00:00+03:00',endsAt:'2026-10-14T23:00:00+03:00'},
+    {id:'closing',startsAt:'2026-10-14T21:30:00+03:00',endsAt:'2026-10-14T23:00:00+03:00'},
+  ],'2026-10-14');
+  assert.equal(intervals.length,1);
+  assert.equal(intervals[0].session.id,'closing');
+  assert.equal(intervals[0].top,648);assert.equal(intervals[0].height,24);
+});
 test('временная сетка отображает длительность и раскладывает пересечения по полосам',()=>{
   const intervals=calendarSessionLayout([
     {id:'one',startsAt:'2026-10-14T09:00:00+03:00',endsAt:'2026-10-14T10:00:00+03:00'},
     {id:'two',startsAt:'2026-10-14T09:30:00+03:00',endsAt:'2026-10-14T10:30:00+03:00'},
   ],'2026-10-14');
-  assert.equal(intervals[0].top,192);assert.equal(intervals[0].height,96);
+  assert.equal(intervals[0].top,48);assert.equal(intervals[0].height,48);
   assert.equal(intervals[0].laneCount,2);assert.notEqual(intervals[0].lane,intervals[1].lane);
-  const crossing=calendarSessionLayout([{id:'overnight',startsAt:'2026-10-13T23:00:00+03:00',endsAt:'2026-10-14T08:00:00+03:00'}],'2026-10-14');
-  assert.equal(crossing[0].top,0);assert.equal(crossing[0].height,96);
+  const crossing=calendarSessionLayout([{id:'overnight',startsAt:'2026-10-13T23:00:00+03:00',endsAt:'2026-10-14T09:00:00+03:00'}],'2026-10-14');
+  assert.equal(crossing[0].top,0);assert.equal(crossing[0].height,48);
 });
 
 test('Gelios использует собственную навигацию и UUID, не числовые id Terfit',()=>{

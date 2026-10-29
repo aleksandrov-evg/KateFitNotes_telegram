@@ -55,6 +55,8 @@ export const sessionFormats = [['GROUP_REFORMER','Группа на реформ
 export const sessionTimeState = (startsAt, durationMinutes, now = new Date()) => {
   const start=new Date(startsAt),end=new Date(start.getTime()+Number(durationMinutes)*60000);
   if(!Number.isFinite(start.getTime())||!Number.isInteger(Number(durationMinutes))||durationMinutes<1||durationMinutes>1440)throw new Error('Укажите корректное время и длительность 1–1440 минут.');
+  const day=calendarDate(start),opening=new Date(day+'T08:00:00+03:00'),closing=new Date(day+'T22:00:00+03:00');
+  if(start<opening||end>closing)throw new Error('Тренировка должна начинаться не раньше 08:00 и заканчиваться не позже 22:00 (Москва).');
   return end<=now?'COMPLETED':start<=now?'CONFIRMED':'PLANNED';
 };
 export const sessionCreationPayload = (values, key, now = new Date()) => {
@@ -66,7 +68,7 @@ export const sessionCreationPayload = (values, key, now = new Date()) => {
   return {name,sessionFormat:values.sessionFormat,startsAt,durationMinutes,capacity,status,pastConfirmed:status==='COMPLETED',idempotencyKey:key};
 };
 export const calendarSessionLayout = (sessions, day) => {
-  const start=new Date(day+'T07:00:00+03:00').getTime(),end=new Date(day+'T23:00:00+03:00').getTime();
+  const start=new Date(day+'T08:00:00+03:00').getTime(),end=new Date(day+'T22:00:00+03:00').getTime();
   const intervals=sessions.map(session=>({session,start:Math.max(start,new Date(session.startsAt).getTime()),end:Math.min(end,new Date(session.endsAt).getTime())})).filter(interval=>interval.end>interval.start).sort((a,b)=>a.start-b.start||a.end-b.end);
   const lanes=[];
   for(const interval of intervals){
@@ -75,7 +77,7 @@ export const calendarSessionLayout = (sessions, day) => {
     lanes[lane]=interval.end;
     interval.lane=lane;
   }
-  return intervals.map(interval=>({...interval,top:(interval.start-start)/60000/30*48,height:(interval.end-interval.start)/60000/30*48,laneCount:lanes.length}));
+  return intervals.map(interval=>({...interval,top:(interval.start-start)/60000/30*24,height:(interval.end-interval.start)/60000/30*24,laneCount:lanes.length}));
 };
 export const sessionMemberships = (packages, products, personId, session) => personPackages(packages,personId).filter(membership => {
   const product=products.find(product=>product.id===relationId(membership,'product'));
