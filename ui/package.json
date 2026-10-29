@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "python3 scripts/dev_server.py",
-    "check": "node --check src/app.js && node --check src/api.js && node --check src/domain.js && node --check src/studio.js && node --check src/studio-domain.js && node --check src/studio-calendar.js && node --check src/studio-select.js && node --check src/studio-analytics.js && node --check src/studio-analytics-domain.js",
+    "check": "node --check src/app.js && node --check src/api.js && node --check src/domain.js && node --check src/studio.js && node --check src/studio-domain.js && node --check src/studio-calendar.js && node --check src/studio-select.js && node --check src/studio-analytics.js && node --check src/studio-analytics-domain.js && node --check src/studio-analytics-balances.js",
     "test": "node --test tests/*.test.js",
     "test:browser": "node scripts/smoke_studio.mjs",
     "test:browser:http": "node scripts/smoke_http_payment.mjs",
