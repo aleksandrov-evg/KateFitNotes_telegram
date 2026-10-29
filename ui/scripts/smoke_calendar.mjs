@@ -56,6 +56,12 @@ try{
   await page.goto((process.env.UI_SMOKE_URL||'http://127.0.0.1:5184/')+'#gelios/calendar');
   await page.getByRole('heading',{name:'Календарь тренировок',exact:true}).waitFor();
   if(weekStart(calendarDate(startsAt))!==weekStart(today()))await page.getByRole('button',{name:'Неделя →',exact:true}).click();
+  const slots=page.locator('.calendar-time-day').first().locator('[data-calendar-slot]');
+  assert.equal(await slots.count(),28);
+  assert.ok((await slots.first().getAttribute('data-calendar-slot')).endsWith('T08:00'));
+  assert.ok((await slots.last().getAttribute('data-calendar-slot')).endsWith('T21:30'));
+  assert.equal((await slots.first().boundingBox()).height,24);
+  assert.equal((await page.locator('.calendar-time-day').first().boundingBox()).height,672);
   await page.screenshot({path:join(tmpdir(),'gelios-calendar-desktop.png'),fullPage:true});
   await page.getByRole('button',{name:/Реформер · календарь/}).click();
   const modal=page.locator('#confirm');

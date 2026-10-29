@@ -98,7 +98,7 @@
 .studio-shell .studio-calendar .week-toolbar { align-items: center; flex-direction: row; }
 .studio-shell .week-toolbar button { min-height: 36px; padding: 8px 12px; }
 .studio-shell .calendar-time-scroll { border-radius: 10px; }
-.studio-shell .calendar-free-slot { border-radius: 0; padding: 0; height: 48px; min-height: 48px; }
+.studio-shell .calendar-free-slot { border-radius: 0; padding: 0; height: 24px; min-height: 24px; }
 .studio-shell .studio-calendar > .muted { margin-bottom: 16px; }
 .studio-shell .calendar-free-slot:hover { background: #fff7f9; }
 .studio-shell .calendar-grid-event { background: #fbe9ee; border-color: #e2b4c0; color: #3b292e; border-radius: 7px; min-height: 0; padding: 4px 5px; gap: 3px; }
