@@ -9,8 +9,8 @@ export function setStudioSelectClients(records) {
 }
 
 export function enhanceStudioSelects(container = document) {
-  if (!document.body.classList.contains('studio-mode')) return;
-  container.querySelectorAll('select').forEach(select => {
+  const selector = document.body.classList.contains('studio-mode') ? 'select' : '.workspace-switch select';
+  container.querySelectorAll(selector).forEach(select => {
     if (instances.has(select)) return instances.get(select).sync();
     const searchable = select.name === 'personId' || select.id === 'session-person' || select.id === 'calendar-person';
     const wrapper = document.createElement('div');
