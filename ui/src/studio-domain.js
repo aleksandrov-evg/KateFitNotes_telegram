@@ -118,7 +118,7 @@ export const attendancePayload = (values, membership, product, key) => {
   if (!Number.isInteger(duration) || duration <= 0 || !Number.isFinite(startsAt.getTime())) throw new Error('Проверьте время и длительность продукта.');
   const endsAt = new Date(startsAt.getTime() + duration * 60000);
   if (endsAt >= new Date()) throw new Error('Можно внести только полностью прошедшую тренировку.');
-  return {personId:values.personId,membershipId:membership.id,startsAt:startsAt.toISOString(),endsAt:endsAt.toISOString(),reason:values.reason.trim(),source:values.source,...(values.sourceDetails?.trim()?{sourceDetails:values.sourceDetails.trim()}:{}),...(values.existingClassSessionId?{existingClassSessionId:values.existingClassSessionId}:{}),idempotencyKey:key};
+  return {...(values.trainerId?{trainerId:values.trainerId}:{}),personId:values.personId,membershipId:membership.id,startsAt:startsAt.toISOString(),endsAt:endsAt.toISOString(),reason:values.reason.trim(),source:values.source,...(values.sourceDetails?.trim()?{sourceDetails:values.sourceDetails.trim()}:{}),...(values.existingClassSessionId?{existingClassSessionId:values.existingClassSessionId}:{}),idempotencyKey:key};
 };
 
 export class PendingStudioOperation {

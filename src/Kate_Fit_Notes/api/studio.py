@@ -71,7 +71,33 @@ class StudioCrm:
         self.client.close()
 
     def attendance(self, body: dict, *, preview: bool) -> dict:
-        return self.command("/studio/attendance/record-past", {**body, "previewOnly": preview})
+        trainer_id = body.get("trainerId")
+        trainer = None
+        assigned_trainer_id = None
+        if trainer_id:
+            if body.get("existingClassSessionId"):
+                session = self.request("GET", f"/rest/classSessions/{body['existingClassSessionId']}").get("data", {}).get("classSession")
+                if not isinstance(session, dict) or session.get("id") != body["existingClassSessionId"]:
+                    raise HTTPException(502, "CRM не подтвердила выбранное занятие.")
+                assigned_trainer_id = session.get("trainerId")
+                if assigned_trainer_id and assigned_trainer_id != trainer_id:
+                    raise HTTPException(409, "У занятия уже назначен другой тренер. Измените назначение в карточке занятия.")
+            trainer = self.request("GET", f"/rest/studioTrainers/{trainer_id}").get("data", {}).get("studioTrainer")
+            if not isinstance(trainer, dict) or trainer.get("id") != trainer_id or trainer.get("deletedAt") or not trainer.get("active") and assigned_trainer_id != trainer_id:
+                raise HTTPException(409, "Выберите активного тренера из каталога.")
+        data = {key: value for key, value in body.items() if key != "trainerId"}
+        result = self.command("/studio/attendance/record-past", {**data, "previewOnly": preview})
+        if trainer_id and not preview and assigned_trainer_id != trainer_id:
+            # Attendance and trainer assignment use separate guarded CRM commands; retain the attendance key on partial success.
+            try:
+                session_id = result.get("classSessionId")
+                if not isinstance(session_id, str) or str(UUID(session_id)) != session_id:
+                    raise ValueError("CRM did not confirm the session UUID")
+                assignment_key = str(uuid5(NAMESPACE_URL, f"studio-ui-attendance-trainer:{body['idempotencyKey']}:{session_id}:{trainer_id}"))
+                self.command("/studio/sessions/assign-trainer", {"classSessionId": session_id, "trainerId": trainer_id, "requestKey": assignment_key})
+            except (HTTPException, ValueError) as error:
+                raise HTTPException(502, {"code": "ATTENDANCE_TRAINER_UNCONFIRMED", "message": "Посещение сохранено, но назначение тренера не подтверждено. Проверьте занятие и повторяйте только прежний запрос с тем же ключом."}) from error
+        return {**result, **({"trainer": {"id": trainer_id, "name": trainer.get("name", "Тренер")}} if trainer else {})}
 
     def request(self, method: str, path: str, *, body: dict | None = None, params: dict | None = None) -> dict:
         try:
@@ -402,6 +428,7 @@ class AttendanceRequest(BaseModel):
     source: Literal["TRAINER", "ATTENDANCE_LOG", "CLIENT", "ADMIN", "OTHER"]
     source_details: str | None = Field(default=None, alias="sourceDetails", max_length=2000)
     existing_class_session_id: UUID | None = Field(default=None, alias="existingClassSessionId")
+    trainer_id: UUID | None = Field(default=None, alias="trainerId")
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
 
     @field_validator("starts_at", "ends_at")

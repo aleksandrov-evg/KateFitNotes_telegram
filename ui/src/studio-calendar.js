@@ -41,7 +41,7 @@ export class StudioCalendar {
     }
   }
   trainerOptions(selected='') {
-    return '<option value="">Назначить позже</option>'+(this.studio.trainers.data?.trainers||[]).filter(row=>!row.deletedAt&&(row.active||row.id===selected)).map(row=>`<option value="${e(row.id)}" ${row.id===selected?'selected':''}>${e(row.name)}${row.active?'':' (неактивен)'}</option>`).join('');
+    return '<option value="">Выберите тренера</option>'+(this.studio.trainers.data?.trainers||[]).filter(row=>!row.deletedAt&&(row.active||row.id===selected)).map(row=>`<option value="${e(row.id)}" ${row.id===selected?'selected':''}>${e(row.name)}${row.active?'':' (неактивен)'}</option>`).join('');
   }
   openCreate(slot) {
     const {studio}=this,pending=studio.pending.get('session');
@@ -50,7 +50,8 @@ export class StudioCalendar {
     studio.showDialog('Новая тренировка',`<form id="calendar-create-form">
       ${field('session-name','Название (из формата)','<input id="session-name" name="name" readonly>')}
       ${field('session-format','Формат',`<select id="session-format" name="sessionFormat">${sessionFormats.map(([value,text])=>`<option value="${value}">${e(text)}</option>`).join('')}</select>`)}
-      ${field('session-trainer','Тренер',`<select id="session-trainer" name="trainerId">${this.trainerOptions(values.trainerId)}</select>`)}
+      ${field('session-trainer','Тренер',`<select id="session-trainer" name="trainerId" required>${this.trainerOptions(values.trainerId)}</select>`)}
+      <p class="muted">${(studio.trainers.data?.trainers||[]).some(row=>row.active&&!row.deletedAt)?'Назначается один тренер на занятие.':'Нет активных тренеров. Управление тренерами — в разделе «Тренеры и зарплата».'}</p>
       ${field('session-start','Дата и начало (Москва)','<input id="session-start" name="startsAt" type="datetime-local" required>')}
       ${field('session-duration','Длительность, минут','<input id="session-duration" name="durationMinutes" type="number" min="1" max="1440" required>')}
       ${field('session-capacity','Количество мест','<input id="session-capacity" name="capacity" type="number" min="1" max="100" required>')}

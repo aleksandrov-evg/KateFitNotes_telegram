@@ -30,7 +30,7 @@ def payroll_app():
             return httpx.Response(200,json={'data':{'createStudioEvent':{'id':json.loads(request.content)['id']}}})
         if path.startswith('/rest/'):
             parts=path.split('/');plural=parts[2]
-            singular={'studioTrainers':'studioTrainer','trainerPayRates':'trainerPayRate','trainerRateAssignments':'trainerRateAssignment','studioEvents':'studioEvent'}[plural]
+            singular={'studioTrainers':'studioTrainer','trainerPayRates':'trainerPayRate','trainerRateAssignments':'trainerRateAssignment','studioEvents':'studioEvent','classSessions':'classSession'}[plural]
             if request.method=='GET':
                 if len(parts)==3:return httpx.Response(200,json={'data':{plural:state['assignments']},'pageInfo':{'hasNextPage':False}})
                 row=state['records'].get(parts[3])
@@ -42,6 +42,7 @@ def payroll_app():
             if state.get('assignment_timeout') and path=='/s/studio/sessions/assign-trainer':raise httpx.ReadTimeout('lost assignment',request=request)
             if state['timeout']:raise httpx.ReadTimeout('lost response',request=request)
             body=json.loads(request.content)
+            if path=='/s/studio/attendance/record-past':return httpx.Response(200,json={'success':True,'preview':body.get('previewOnly',False),'classSessionId':SESSION,'visitsAvailable':5,'visitsAfter':4})
             if path=='/s/studio/sessions/create':return httpx.Response(200,json={'success':True,'classSessionId':SESSION,'duplicate':False})
             if state['malformed']:return httpx.Response(200,json={'success':True})
             if body.get('previewOnly'):return httpx.Response(200,json={'success':True,'preview':True,'snapshot':{'amount':{'amountMicros':1650000000}},'previewToken':'a'*64,'revision':1})
@@ -134,3 +135,61 @@ def test_partially_created_session_is_reported_unknown_to_preserve_original_key(
     assert len([row for row in calls if row.url.path=='/s/studio/sessions/create'])==1
     assert len([row for row in calls if row.url.path=='/s/studio/sessions/assign-trainer'])==1
     assert json.loads(calls[-1].content)['idempotencyKey']==SESSION_BODY['idempotencyKey']
+
+
+def test_attendance_preview_validates_and_displays_trainer_without_assigning(payroll_app):
+    from tests.test_studio_api import ATTENDANCE
+    client,calls,state,headers=payroll_app
+    state['records'][TRAINER]={'id':TRAINER,'name':'Тестовый тренер','active':True}
+    response=client.post('/api/v1/studio/attendance/preview',json={**ATTENDANCE,'trainerId':TRAINER},headers=headers)
+    assert response.status_code==200
+    assert response.json()['trainer']=={'id':TRAINER,'name':'Тестовый тренер'}
+    assert 'trainerId' not in json.loads(calls[-1].content)
+    assert len([row for row in calls if row.method=='POST'])==1
+    assert not any(row.url.path=='/s/studio/sessions/assign-trainer' for row in calls)
+
+
+def test_attendance_assigns_selected_trainer_with_stable_retry_key(payroll_app):
+    from tests.test_studio_api import ATTENDANCE
+    client,calls,state,headers=payroll_app
+    state['records'][TRAINER]={'id':TRAINER,'name':'Тестовый тренер','active':True}
+    for _ in range(2):
+        assert client.post('/api/v1/studio/attendance/record-past',json={**ATTENDANCE,'trainerId':TRAINER},headers=headers).status_code==200
+    assignments=[json.loads(row.content) for row in calls if row.url.path=='/s/studio/sessions/assign-trainer']
+    assert len(assignments)==2
+    assert assignments[0]==assignments[1]
+    assert assignments[0]['trainerId']==TRAINER
+    assert assignments[0]['classSessionId']==SESSION
+
+
+def test_attendance_rejects_inactive_trainer_before_consumption(payroll_app):
+    from tests.test_studio_api import ATTENDANCE
+    client,calls,state,headers=payroll_app
+    state['records'][TRAINER]={'id':TRAINER,'active':False}
+    assert client.post('/api/v1/studio/attendance/record-past',json={**ATTENDANCE,'trainerId':TRAINER},headers=headers).status_code==409
+    assert not any(row.url.path=='/s/studio/attendance/record-past' for row in calls)
+
+
+def test_attendance_preserves_existing_session_trainer_even_when_inactive(payroll_app):
+    from tests.test_studio_api import ATTENDANCE
+    client,calls,state,headers=payroll_app
+    state['records'][TRAINER]={'id':TRAINER,'name':'Тренер занятия','active':False}
+    state['records'][SESSION]={'id':SESSION,'trainerId':TRAINER}
+    body={**ATTENDANCE,'trainerId':TRAINER,'existingClassSessionId':SESSION}
+    assert client.post('/api/v1/studio/attendance/record-past',json=body,headers=headers).status_code==200
+    assert not any(row.url.path=='/s/studio/sessions/assign-trainer' for row in calls)
+    state['records'][SESSION]['trainerId']=KEY
+    assert client.post('/api/v1/studio/attendance/preview',json=body,headers=headers).status_code==409
+
+
+def test_attendance_assignment_timeout_retains_original_operation_key(payroll_app):
+    from tests.test_studio_api import ATTENDANCE
+    client,calls,state,headers=payroll_app
+    state['records'][TRAINER]={'id':TRAINER,'name':'Тренер','active':True}
+    state['assignment_timeout']=True
+    response=client.post('/api/v1/studio/attendance/record-past',json={**ATTENDANCE,'trainerId':TRAINER},headers=headers)
+    assert response.status_code==502
+    assert response.json()['detail']['code']=='ATTENDANCE_TRAINER_UNCONFIRMED'
+    assert len([row for row in calls if row.url.path=='/s/studio/attendance/record-past'])==1
+    assert len([row for row in calls if row.url.path=='/s/studio/sessions/assign-trainer'])==1
+    assert json.loads(calls[-1].content)['idempotencyKey']==ATTENDANCE['idempotencyKey']
