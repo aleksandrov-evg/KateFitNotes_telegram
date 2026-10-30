@@ -79,7 +79,7 @@ class StudioCrm:
                 method, f"{self.settings.base_url.rstrip('/')}{path}",
                 headers={"Authorization": f"Bearer {self.settings.api_key}"},
                 json=body, params=params,
-                **({"timeout": 65.0} if path == "/s/studio/sessions/create" else {}),
+                **({"timeout": 65.0} if path in {"/s/studio/sessions/create", "/s/studio/compensation/close"} else {}),
             )
         except httpx.HTTPError as exc:
             message = "Ответ CRM не получен. Повторите загрузку." if method == "GET" or body and body.get("previewOnly") else "Результат неизвестен. Проверьте историю и повторяйте только с прежним ключом операции."
@@ -139,7 +139,7 @@ class StudioCrm:
             return action()
         except Exception as exc:
             failure = exc if isinstance(exc, HTTPException) else HTTPException(502, {"code": "API_OPERATION_UNCONFIRMED", "message": "Результат операции API не подтверждён. Проверьте CRM и повторите с прежним ключом."})
-            key = str(body.get("idempotencyKey") or body.get("clientId"))
+            key = str(body.get("idempotencyKey") or body.get("requestKey") or body.get("clientId"))
             details = failure.detail if isinstance(failure.detail, dict) else {"message": str(failure.detail)}
             # Unknown responses may follow committed writes; never describe them as a rollback.
             event = {"id": str(uuid5(NAMESPACE_URL, f"studio-ui-failure:{operation}:{key}")),
@@ -160,7 +160,7 @@ class StudioCrm:
             raise failure from exc
 
     def list_records(self, resource: str, cursor: str | None = None) -> dict:
-        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents", "payments": "studioPayments", "expenses": "studioExpenses"}
+        objects = {"clients": "people", "products": "studioProducts", "packages": "studioMemberships", "bookings": "studioBookings", "sessions": "classSessions", "transactions": "membershipTransactions", "events": "studioEvents", "payments": "studioPayments", "expenses": "studioExpenses", "trainers": "studioTrainers", "trainerRates": "trainerPayRates", "trainerAssignments": "trainerRateAssignments", "trainerPayEntries": "trainerPayEntries"}
         object_name = objects[resource]
         params = {"limit": 100, "depth": 0}
         if cursor:
@@ -460,6 +460,7 @@ class CreateSessionRequest(BaseModel):
     duration_minutes: int = Field(alias="durationMinutes", ge=1, le=1440, strict=True)
     capacity: int = Field(ge=1, le=100, strict=True)
     status: Literal["PLANNED", "CONFIRMED", "COMPLETED"]
+    trainer_id: UUID | None = Field(default=None, alias="trainerId")
     past_confirmed: bool = Field(default=False, alias="pastConfirmed", strict=True)
     idempotency_key: str = Field(alias="idempotencyKey", min_length=1, max_length=200)
     participants: list[SessionParticipantRequest | SessionPaymentParticipantRequest] = Field(default_factory=list, max_length=100)
@@ -515,7 +516,7 @@ def record_past(body: AttendanceRequest, username: str = Depends(require_user), 
 
 
 @router.get("/records/{resource}")
-def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions", "events", "payments", "expenses"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
+def records(resource: Literal["clients", "products", "packages", "bookings", "sessions", "transactions", "events", "payments", "expenses", "trainers", "trainerRates", "trainerAssignments", "trainerPayEntries"], cursor: str | None = None, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     if cursor and len(cursor) > 2000:
         raise HTTPException(422, "Некорректный курсор.")
     return studio.list_records(resource, cursor)
@@ -552,7 +553,7 @@ def create_session_payment(body: SessionPaymentRequest, username: str = Depends(
 
 @router.post("/sessions/create")
 def create_session(body: CreateSessionRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
-    data = body.model_dump(mode="json", by_alias=True)
+    data = body.model_dump(mode="json", by_alias=True, exclude_none=True)
     return studio.perform_operation("sessions/create", data, username, lambda: studio.command("/studio/sessions/create", data))
 
 

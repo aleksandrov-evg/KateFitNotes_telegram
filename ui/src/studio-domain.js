@@ -3,6 +3,7 @@ export const studioNav = [
   ['gelios/packages','Пакеты и оплата','wallet'], ['gelios/attendance','Внести тренировку','plus'],
   ['gelios/calendar','Календарь тренировок','calendar'],
   ['gelios/bookings','Посещения','calendar'], ['gelios/transactions','Журнал списаний','chart'],
+  ['gelios/trainers','Тренеры и зарплата','users'],
   ['gelios/analytics','Аналитика','chart'],
 ];
 
@@ -128,5 +129,5 @@ export class PendingStudioOperation {
   }
   save(kind, body) { this.storage.setItem('gelios-pending-' + kind, JSON.stringify(body)); }
   clear(kind) { this.storage.removeItem('gelios-pending-' + kind); }
-  clearAll() { for (const kind of ['client','payment','attendance','booking','cancellation','session']) this.clear(kind); }
+  clearAll() { for (const kind of ['client','payment','attendance','booking','cancellation','session','payroll']) this.clear(kind); }
 }

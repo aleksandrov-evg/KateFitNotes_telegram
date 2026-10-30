@@ -11,7 +11,7 @@ export class Api {
     let response;
     try {
       response = await this.fetcher(`/api/v1${path}`, {
-        method, signal: signal ?? AbortSignal.timeout(path==='/studio/sessions/create'?70000:20000), cache:'no-store',
+        method, signal: signal ?? AbortSignal.timeout(['/studio/sessions/create','/studio/compensation/close'].includes(path)?70000:20000), cache:'no-store',
         headers:{...(body ? {'Content-Type':'application/json'} : {}), ...(this.token ? {Authorization:`Bearer ${this.token}`} : {})},
         ...(body ? {body:JSON.stringify(body)} : {}),
       });

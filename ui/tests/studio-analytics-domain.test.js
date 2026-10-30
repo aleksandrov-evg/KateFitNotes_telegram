@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {buildAnalytics as buildRawAnalytics,analyticsMoney,analyticsPeriod,shiftAnalyticsMonth} from '../src/studio-analytics-domain.js';
-const completeData = data => Object.assign(Object.fromEntries(['clients','products','packages','bookings','sessions','transactions','payments','expenses'].map(key=>[key,[]])),data);
+const completeData = data => Object.assign(Object.fromEntries(['clients','products','packages','bookings','sessions','transactions','payments','expenses','trainerPayEntries','trainers'].map(key=>[key,[]])),data);
 const buildAnalytics = (data,options) => buildRawAnalytics(completeData(data),options);
 const money = amount => ({amountMicros:amount,currencyCode:'RUB'});
 const options={month:'2026-10',now:new Date('2026-11-02T00:00:00Z')};

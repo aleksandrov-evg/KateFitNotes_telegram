@@ -1,3 +1,6 @@
+import {analyticsMoney} from './studio-money.js';
+import {buildTrainerPayroll} from './studio-payroll-domain.js';
+export {analyticsMoney} from './studio-money.js';
 import {relationId, calendarDate} from './studio-domain.js';
 
 export const analyticsMonth = value => {
@@ -18,13 +21,6 @@ export const analyticsPeriod = (month, now = new Date()) => {
   const end = isPartial ? dayAfter(today) : `${shiftAnalyticsMonth(month,1)}-01`;
   const comparisonEnd = isPartial ? dayAfter(`${previous}-${String(Math.min(Number(today.slice(8)), daysInMonth(previous))).padStart(2,'0')}`) : `${month}-01`;
   return {start:`${month}-01`,end,comparisonStart:`${previous}-01`,comparisonEnd,isPartial,label:isPartial ? `1–${Number(today.slice(8))} ${month}; предыдущий месяц за сопоставимые дни` : month};
-};
-export const analyticsMoney = value => {
-  if (!value || value.currencyCode !== 'RUB') return null;
-  const raw = value.amountMicros;
-  if ((typeof raw === 'number' && !Number.isSafeInteger(raw)) || !/^-?\d+$/.test(String(raw))) return null;
-  const micros = BigInt(raw);
-  return micros % 10000n === 0n ? (micros / 10000n).toString() : null;
 };
 const dated = value => {
   if (!value) return null;
@@ -58,6 +54,8 @@ export const buildAnalytics = (input = {}, {month, now = new Date()} = {}) => {
   const missingSources = sources.filter(key => !Array.isArray(input[key]) || input.incompleteSources?.includes(key));
   const hasSource = key => !missingSources.includes(key);
   const data = Object.fromEntries(['clients','products','packages','bookings','sessions','transactions','payments','expenses'].map(key => [key,available(Array.isArray(input[key]) ? input[key] : [])]));
+  const payroll=buildTrainerPayroll(input,{month,now});
+  data.expenses.push(...payroll.expenses);
   const sessionsById = new Map(data.sessions.map(session => [session.id,session]));
   const bookingDate = booking => sessionsById.get(relationId(booking,'classSession'))?.startsAt;
   const occurred = value => dated(value) && (/^\d{4}-\d{2}-\d{2}$/.test(value) ? dated(value) <= calendarDate(now) : new Date(value) <= now);
@@ -86,7 +84,7 @@ export const buildAnalytics = (input = {}, {month, now = new Date()} = {}) => {
     const receipts = !hasSource('payments') || hasUndatedPayment ? null : sumMoney(payments,'amount'), expensePayments = !hasSource('expenses') || hasInvalidPaidDate ? null : sumMoney(paidExpenses,'amount');
     const refunds = !hasSource('payments') || hasUndatedRefund ? null : '0';
     const attendanceAvailable = bookingSourcesAvailable && !hasInvalidAttendanceDate && !hasInvalidSessionDate;
-    return {...nullMoney,receipts,refunds,expenses:!hasSource('expenses') || hasUndatedExpense ? null : sumMoney(expenses,'amount'),expensePayments,cashFlow:receipts !== null && expensePayments !== null && refunds !== null ? (BigInt(receipts)-BigInt(expensePayments)-BigInt(refunds)).toString() : null,visits:attendanceAvailable ? visits.length : null,sessions:hasSource('sessions') && !hasInvalidSessionDate ? sessions.length : null,activeClients:attendanceAvailable ? new Set(visits.map(booking=>relationId(booking,'person')).filter(Boolean)).size : null,occupancy:attendanceAvailable && capacityValid ? ratio(groupVisits,capacity) : null,cancellations:bookingSourcesAvailable && !hasInvalidCancellationDate ? bookings.filter(booking=>CANCELLATION_STATUSES.includes(booking.status)).length : null,noShows:bookingSourcesAvailable && !hasInvalidNoShowDate ? bookings.filter(booking=>booking.status==='NO_SHOW').length : null};
+    return {...nullMoney,receipts,refunds,expenses:!hasSource('expenses') || !payroll.available || hasUndatedExpense ? null : sumMoney(expenses,'amount'),expensePayments,cashFlow:receipts !== null && expensePayments !== null && refunds !== null ? (BigInt(receipts)-BigInt(expensePayments)-BigInt(refunds)).toString() : null,visits:attendanceAvailable ? visits.length : null,sessions:hasSource('sessions') && !hasInvalidSessionDate ? sessions.length : null,activeClients:attendanceAvailable ? new Set(visits.map(booking=>relationId(booking,'person')).filter(Boolean)).size : null,occupancy:attendanceAvailable && capacityValid ? ratio(groupVisits,capacity) : null,cancellations:bookingSourcesAvailable && !hasInvalidCancellationDate ? bookings.filter(booking=>CANCELLATION_STATUSES.includes(booking.status)).length : null,noShows:bookingSourcesAvailable && !hasInvalidNoShowDate ? bookings.filter(booking=>booking.status==='NO_SHOW').length : null};
   };
   const attendanceAvailable = bookingSourcesAvailable && !hasInvalidAttendanceDate && !hasInvalidSessionDate;
   const clientsAvailable = attendanceAvailable && hasSource('clients');
@@ -100,7 +98,7 @@ export const buildAnalytics = (input = {}, {month, now = new Date()} = {}) => {
     return {format,sessions:sessions.length,visits,capacity,freeSeats:capacity===null || visits===null ? null : Math.max(0,capacity-visits),occupancy:capacity===null || visits===null ? null : ratio(visits,capacity),revenue:null};
   });
   const expenses=data.expenses.filter(expense=>String(expense.accruedOn || '').slice(0,7)===month);
-  const breakdown = field => [...new Set(expenses.map(expense=>expense[field] || 'UNKNOWN'))].map(value=>{const records=expenses.filter(expense=>(expense[field]||'UNKNOWN')===value);return {[field]:value,amount:hasUndatedExpense || !hasSource('expenses') ? null : sumMoney(records,'amount'),count:records.length};});
+  const breakdown = field => [...new Set(expenses.map(expense=>expense[field] || 'UNKNOWN'))].map(value=>{const records=expenses.filter(expense=>(expense[field]||'UNKNOWN')===value);return {[field]:value,amount:hasUndatedExpense || !hasSource('expenses') || !payroll.available ? null : sumMoney(records,'amount'),count:records.length};});
   const firstAttendance=new Map();
   for(const booking of completedBookings.filter(booking=>booking.status==='ATTENDED')) {const personId=relationId(booking,'person'),day=dated(bookingDate(booking));if(personId&&day&&(!firstAttendance.has(personId)||day<firstAttendance.get(personId)))firstAttendance.set(personId,day);}
   const previousFullStart = `${shiftAnalyticsMonth(month,-1)}-01`;
@@ -119,7 +117,8 @@ export const buildAnalytics = (input = {}, {month, now = new Date()} = {}) => {
   if(hasUndatedPayment)availability.receipts='Есть проведённые оплаты без даты. Поступления по месяцам нельзя определить достоверно.';
   if(hasUndatedExpense)availability.expenses='Есть расходы без корректного месяца начисления (первое число месяца). Итоги начисленных расходов неполны.';
   if(hasUndatedRefund)availability.refunds='CRM хранит накопленную сумму возврата без даты. Возвраты и денежный поток по месяцам недоступны.';
-  const warnings=[...Object.values(availability),'Расходы включают только внесённые записи. Начисления учитываются за весь месяц без пропорционального деления, в том числе в текущем неполном месяце.','Когорты клиентов определяются по первому посещению в доступной истории CRM.'];
+  if(!payroll.available)availability.expenses=payroll.reasons.join(' ');
+  const warnings=[...payroll.warnings,...Object.values(availability),'Расходы включают только внесённые записи. Начисления учитываются за весь месяц без пропорционального деления, в том числе в текущем неполном месяце.','Когорты клиентов определяются по первому посещению в доступной истории CRM.'];
   if(data.expenses.some(expense=>!expense.accruedOn||String(expense.accruedOn).slice(8,10)!=='01'))warnings.push('Есть расходы без корректного месяца начисления (первое число месяца). Проверьте записи CRM.');
-  return {month,period,metrics,previous:metricsFor(period.comparisonStart,period.comparisonEnd),series:Array.from({length:6},(_,index)=>{const seriesMonth=shiftAnalyticsMonth(month,index-5);const bounds=analyticsPeriod(seriesMonth,now);return {month:seriesMonth,...metricsFor(bounds.start,bounds.end)};}),formats,expenseCategories:breakdown('category'),expenseTypes:breakdown('costType'),clients:{available:clientsAvailable,active,new:active.filter(client=>client.firstVisit>=period.start),returning:active.filter(client=>client.firstVisit<previousFullStart && !previousFullIds.has(client.id)),retained:active.filter(client=>previousFullIds.has(client.id)),inactive:data.clients.filter(client=>!activeIds.has(client.id)&&previousComparableIds.has(client.id)).map(client=>({id:client.id,name:nameOf(client),firstVisit:firstAttendance.get(client.id)}))},balances:{prepayments:null,debts:null},expenses,warnings,availability,missingSources};
+  return {month,period,metrics,payroll,previous:metricsFor(period.comparisonStart,period.comparisonEnd),series:Array.from({length:6},(_,index)=>{const seriesMonth=shiftAnalyticsMonth(month,index-5);const bounds=analyticsPeriod(seriesMonth,now);return {month:seriesMonth,...metricsFor(bounds.start,bounds.end)};}),formats,expenseCategories:breakdown('category'),expenseTypes:breakdown('costType'),clients:{available:clientsAvailable,active,new:active.filter(client=>client.firstVisit>=period.start),returning:active.filter(client=>client.firstVisit<previousFullStart && !previousFullIds.has(client.id)),retained:active.filter(client=>previousFullIds.has(client.id)),inactive:data.clients.filter(client=>!activeIds.has(client.id)&&previousComparableIds.has(client.id)).map(client=>({id:client.id,name:nameOf(client),firstVisit:firstAttendance.get(client.id)}))},balances:{prepayments:null,debts:null},expenses,warnings,availability,missingSources};
 };

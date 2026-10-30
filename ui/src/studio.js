@@ -2,6 +2,7 @@ import {bindPhoneInput} from './phone-input.js';
 import {escapeHtml as e, money, normalizePhone} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
 import {StudioAnalytics} from './studio-analytics.js';
+import {StudioTrainers} from './studio-trainers.js';
 import {setStudioSelectClients} from './studio-select.js';
 import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate, paymentStartOfMoscowDay} from './studio-domain.js';
 
@@ -31,17 +32,20 @@ export class StudioUi {
     this.pending = new PendingStudioOperation();
     this.calendar = new StudioCalendar(this);
     this.analytics = new StudioAnalytics(this);
+    this.trainers = new StudioTrainers(this);
     this.data = null; this.generation = 0; this.saving = false;
   }
-  reset() { this.generation++; this.analytics.deactivate(); this.analytics.data=null; this.data=null; setStudioSelectClients([]); }
-  deactivate() { this.generation++; this.analytics.deactivate(); }
+  reset() { this.trainers.deactivate(); this.trainers.data=null; this.generation++; this.analytics.deactivate(); this.analytics.data=null; this.data=null; setStudioSelectClients([]); }
+  deactivate() { this.trainers.deactivate(); this.generation++; this.analytics.deactivate(); }
   clientName(id) { return studioPersonName(this.data.clients.find(person=>person.id===id)); }
   product(id) { return this.data.products.find(product=>product.id===id); }
   membership(id) { return this.data.packages.find(membership=>membership.id===id); }
   async render(route, force = false) {
     const run = ++this.generation;
     this.route = route;
+    this.trainers.deactivate();
     if (route === 'analytics') return this.analytics.render(force);
+    if (route === 'trainers') { this.analytics.deactivate(); return this.trainers.render(force); }
     this.analytics.deactivate();
     this.page(this.header('Студия Gelios','Данные и списания из Twenty CRM') + '<p role="status">Загружаем данные студии…</p>');
     try {
@@ -55,6 +59,11 @@ export class StudioUi {
       }
       if (run !== this.generation) return;
       setStudioSelectClients(this.data.clients);
+      if (route === 'calendar') {
+        try { await this.trainers.load(force); this.calendar.trainerLoadError=''; }
+        catch { this.trainers.data=null; this.calendar.trainerLoadError='Каталог тренеров недоступен. Обновите данные перед назначением или начислением.'; }
+        if(run!==this.generation)return;
+      }
       ({overview:()=>this.overview(),clients:()=>this.clients(),packages:()=>this.packages(),attendance:()=>this.attendance(),bookings:()=>this.bookings(),transactions:()=>this.transactions(),calendar:()=>this.calendar.render()})[route]();
       document.querySelector('.refresh').onclick=()=>this.render(this.route,true);
     } catch(error) {

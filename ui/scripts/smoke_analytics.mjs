@@ -18,7 +18,7 @@ const personId='00000000-0000-4000-8000-000000000001';
 const expenseId='00000000-0000-4000-8000-000000000002';
 const data={
   clients:[{id:personId,name:{firstName:'Анна',lastName:'Тестовая'}}],
-  products:[],packages:[],transactions:[],events:[],
+  products:[],packages:[],transactions:[],events:[],trainers:[],trainerPayEntries:[],
   sessions:[{id:'session-1',name:'Группа на реформере',sessionFormat:'GROUP_REFORMER',capacity:4,status:'COMPLETED',startsAt:'2026-10-15T09:00:00+03:00',endsAt:'2026-10-15T09:55:00+03:00'}],
   bookings:[{id:'booking-1',personId,classSessionId:'session-1',status:'ATTENDED'}],
   payments:[{id:'payment-1',personId,name:'Тестовая оплата',status:'PAID',paidAt:'2026-10-10T09:00:00+03:00',amount:currency('1000000')}],
