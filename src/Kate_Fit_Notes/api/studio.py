@@ -554,7 +554,22 @@ def create_session_payment(body: SessionPaymentRequest, username: str = Depends(
 @router.post("/sessions/create")
 def create_session(body: CreateSessionRequest, username: str = Depends(require_user), studio: StudioCrm = Depends(get_studio)):
     data = body.model_dump(mode="json", by_alias=True, exclude_none=True)
-    return studio.perform_operation("sessions/create", data, username, lambda: studio.command("/studio/sessions/create", data))
+    def execute():
+        # The deployed CRM creates classes and assigns trainers through separate guarded commands.
+        creation = {key: value for key, value in data.items() if key != "trainerId"}
+        result = studio.command("/studio/sessions/create", creation)
+        if not body.trainer_id:
+            return result
+        session_id = result.get("classSessionId")
+        try:
+            if not isinstance(session_id, str) or str(UUID(session_id)) != session_id:
+                raise ValueError("CRM did not confirm the session UUID")
+            assignment_key = str(uuid5(NAMESPACE_URL, f"studio-ui-session-trainer:{body.idempotency_key}:{session_id}:{body.trainer_id}"))
+            studio.command("/studio/sessions/assign-trainer", {"classSessionId": session_id, "trainerId": str(body.trainer_id), "requestKey": assignment_key})
+        except (HTTPException, ValueError) as error:
+            raise HTTPException(502, {"code": "SESSION_TRAINER_UNCONFIRMED", "message": "Занятие создано, но назначение тренера не подтверждено. Проверьте карточку и повторяйте только прежний запрос; не создавайте новое занятие."}) from error
+        return result
+    return studio.perform_operation("sessions/create", data, username, execute)
 
 
 @router.post("/bookings/cancel")

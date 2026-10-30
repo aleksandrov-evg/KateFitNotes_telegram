@@ -39,8 +39,10 @@ def payroll_app():
             operation=('update' if request.method=='PATCH' else 'create')+singular[0].upper()+singular[1:]
             return httpx.Response(200,json={'data':{operation:{'id':record_id}}})
         if path.startswith('/s/studio/'):
+            if state.get('assignment_timeout') and path=='/s/studio/sessions/assign-trainer':raise httpx.ReadTimeout('lost assignment',request=request)
             if state['timeout']:raise httpx.ReadTimeout('lost response',request=request)
             body=json.loads(request.content)
+            if path=='/s/studio/sessions/create':return httpx.Response(200,json={'success':True,'classSessionId':SESSION,'duplicate':False})
             if state['malformed']:return httpx.Response(200,json={'success':True})
             if body.get('previewOnly'):return httpx.Response(200,json={'success':True,'preview':True,'snapshot':{'amount':{'amountMicros':1650000000}},'previewToken':'a'*64,'revision':1})
             return httpx.Response(200,json={'success':True,'preview':False,'entryId':KEY,'amountMicros':1650000000,'duplicate':False})
@@ -104,3 +106,31 @@ def test_assignment_overlap_is_rejected_but_touching_boundaries_are_allowed(payr
     assert all(row.method=='GET' for row in calls)
     assert client.post('/api/v1/studio/trainer-assignments/save',json={**body,'validFrom':'2026-11-01T00:00:00+03:00'},headers=headers).status_code==200
     assert calls[-1].method=='POST'
+
+
+def test_new_session_assigns_trainer_through_guarded_command_with_stable_key(payroll_app):
+    client,calls,_,headers=payroll_app
+    from tests.test_studio_calendar_api import SESSION as SESSION_BODY
+    body={**SESSION_BODY,'trainerId':TRAINER}
+    for _ in range(2):
+        response=client.post('/api/v1/studio/sessions/create',json=body,headers=headers)
+        assert response.status_code==200
+    creations=[json.loads(row.content) for row in calls if row.url.path=='/s/studio/sessions/create']
+    assignments=[json.loads(row.content) for row in calls if row.url.path=='/s/studio/sessions/assign-trainer']
+    assert len(creations)==len(assignments)==2
+    assert 'trainerId' not in creations[0]
+    assert assignments[0]==assignments[1]
+    assert assignments[0]['classSessionId']==SESSION
+    assert assignments[0]['trainerId']==TRAINER
+
+
+def test_partially_created_session_is_reported_unknown_to_preserve_original_key(payroll_app):
+    client,calls,state,headers=payroll_app
+    from tests.test_studio_calendar_api import SESSION as SESSION_BODY
+    state['assignment_timeout']=True
+    response=client.post('/api/v1/studio/sessions/create',json={**SESSION_BODY,'trainerId':TRAINER},headers=headers)
+    assert response.status_code==502
+    assert response.json()['detail']['code']=='SESSION_TRAINER_UNCONFIRMED'
+    assert len([row for row in calls if row.url.path=='/s/studio/sessions/create'])==1
+    assert len([row for row in calls if row.url.path=='/s/studio/sessions/assign-trainer'])==1
+    assert json.loads(calls[-1].content)['idempotencyKey']==SESSION_BODY['idempotencyKey']
