@@ -12,6 +12,7 @@ from src.Kate_Fit_Notes.api.routes import router as api_router
 from src.Kate_Fit_Notes.api.request_log import RequestLogMiddleware
 from src.Kate_Fit_Notes.api.schemas import HealthOut
 from src.Kate_Fit_Notes.api.studio import StudioCrm, load_studio_settings, router as studio_router
+from src.Kate_Fit_Notes.api.studio_payroll import router as payroll_router
 from src.Kate_Fit_Notes.repository import KateFitRepository, PostgresRepository
 from src.Kate_Fit_Notes.services.booking import BookingService
 from src.Kate_Fit_Notes.services.clients import ClientService
@@ -79,6 +80,7 @@ def create_app(settings: Settings | ApiSettings, repository: KateFitRepository, 
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(api_router, prefix="/api/v1")
     app.include_router(studio_router, prefix="/api/v1")
+    app.include_router(payroll_router, prefix="/api/v1")
 
     @app.get("/health", response_model=HealthOut)
     def health() -> HealthOut:

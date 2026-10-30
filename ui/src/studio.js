@@ -2,6 +2,7 @@ import {bindPhoneInput} from './phone-input.js';
 import {escapeHtml as e, money, normalizePhone} from './domain.js';
 import {StudioCalendar} from './studio-calendar.js';
 import {StudioAnalytics} from './studio-analytics.js';
+import {StudioTrainers} from './studio-trainers.js';
 import {setStudioSelectClients} from './studio-select.js';
 import {studioPersonName, relationId, currencyAmount, eligibleProducts, personPackages, createOperationId, attendancePayload, PendingStudioOperation, calendarDate, paymentStartOfMoscowDay} from './studio-domain.js';
 
@@ -31,17 +32,20 @@ export class StudioUi {
     this.pending = new PendingStudioOperation();
     this.calendar = new StudioCalendar(this);
     this.analytics = new StudioAnalytics(this);
+    this.trainers = new StudioTrainers(this);
     this.data = null; this.generation = 0; this.saving = false;
   }
-  reset() { this.generation++; this.analytics.deactivate(); this.analytics.data=null; this.data=null; setStudioSelectClients([]); }
-  deactivate() { this.generation++; this.analytics.deactivate(); }
+  reset() { this.trainers.deactivate(); this.trainers.data=null; this.generation++; this.analytics.deactivate(); this.analytics.data=null; this.data=null; setStudioSelectClients([]); }
+  deactivate() { this.trainers.deactivate(); this.generation++; this.analytics.deactivate(); }
   clientName(id) { return studioPersonName(this.data.clients.find(person=>person.id===id)); }
   product(id) { return this.data.products.find(product=>product.id===id); }
   membership(id) { return this.data.packages.find(membership=>membership.id===id); }
   async render(route, force = false) {
     const run = ++this.generation;
     this.route = route;
+    this.trainers.deactivate();
     if (route === 'analytics') return this.analytics.render(force);
+    if (route === 'trainers') { this.analytics.deactivate(); return this.trainers.render(force); }
     this.analytics.deactivate();
     this.page(this.header('Студия Gelios','Данные и списания из Twenty CRM') + '<p role="status">Загружаем данные студии…</p>');
     try {
@@ -55,6 +59,16 @@ export class StudioUi {
       }
       if (run !== this.generation) return;
       setStudioSelectClients(this.data.clients);
+      if (route === 'attendance') {
+        try { this.data.trainers=await this.api.studioRecords('trainers'); this.trainerLoadError=''; }
+        catch { this.data.trainers=[]; this.trainerLoadError='Не удалось загрузить тренеров. Обновите данные перед внесением занятия.'; }
+        if(run!==this.generation)return;
+      }
+      if (route === 'calendar') {
+        try { await this.trainers.load(force); this.calendar.trainerLoadError=''; }
+        catch { this.trainers.data=null; this.calendar.trainerLoadError='Каталог тренеров недоступен. Обновите данные перед назначением или начислением.'; }
+        if(run!==this.generation)return;
+      }
       ({overview:()=>this.overview(),clients:()=>this.clients(),packages:()=>this.packages(),attendance:()=>this.attendance(),bookings:()=>this.bookings(),transactions:()=>this.transactions(),calendar:()=>this.calendar.render()})[route]();
       document.querySelector('.refresh').onclick=()=>this.render(this.route,true);
     } catch(error) {
@@ -217,6 +231,8 @@ export class StudioUi {
       ${field('Пакет','<select name="membershipId" required><option value="">Сначала выберите клиента</option></select>')}
       ${field('Начало занятия','<input name="startsAt" type="datetime-local" required>')}
       ${field('Завершённое занятие CRM (необязательно)','<select name="existingClassSessionId"><option value="">Создать историческое занятие</option></select>')}
+      ${field('Тренер','<select name="trainerId" required><option value="">Выберите тренера</option></select>')}
+      <p id="studio-trainer-help" class="muted"></p>
       ${field('Источник','<select name="source"><option value="ATTENDANCE_LOG">Журнал посещений</option><option value="TRAINER">Тренер</option><option value="CLIENT">Клиент</option><option value="ADMIN">Администратор</option><option value="OTHER">Другое</option></select>')}
       ${field('Причина внесения','<input name="reason" required maxlength="2000" placeholder="По журналу посещений">')}
       ${field('Пояснение источника','<input name="sourceDetails" maxlength="2000">')}
@@ -226,17 +242,26 @@ export class StudioUi {
     const linkedSessionId=new URLSearchParams(location.hash.split('?')[1]||'').get('session');
     const linkedSession=this.data.sessions.find(session=>session.id===linkedSessionId);
     if(linkedSession)form.startsAt.value=calendarDate(linkedSession.startsAt)+'T'+new Date(linkedSession.startsAt).toLocaleTimeString('en-GB',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit'});
+    const updateTrainer=()=>{
+      const session=this.data.sessions.find(row=>row.id===form.existingClassSessionId.value),assignedId=relationId(session,'trainer');
+      const selected=assignedId||form.trainerId.value;
+      const trainers=(this.data.trainers||[]).filter(row=>!row.deletedAt&&(assignedId?row.id===assignedId:row.active));
+      form.trainerId.innerHTML='<option value="">Выберите тренера</option>'+trainers.map(row=>`<option value="${e(row.id)}">${e(row.name)}${row.active?'':' (неактивен)'}</option>`).join('');
+      form.trainerId.value=trainers.some(row=>row.id===selected)?selected:'';
+      document.querySelector('#studio-trainer-help').textContent=this.trainerLoadError||(assignedId?'Тренер взят из выбранного занятия. Изменение назначения — в карточке занятия.':trainers.length?'Один тренер на занятие. Зарплата начисляется отдельно после проверки всех участников.':'Нет активных тренеров. Управление тренерами — в разделе «Тренеры и зарплата».');
+    };
     const updateSession=()=>{
       const membership=this.membership(form.membershipId.value),product=this.product(relationId(membership,'product'));
       const startsAt=new Date(form.startsAt.value),duration=Number(product?.durationMinutes);
       const candidates=Number.isFinite(startsAt.getTime())&&duration>0?this.data.sessions.filter(session=>session.status==='COMPLETED'&&session.sessionFormat===product.sessionFormat&&new Date(session.startsAt).getTime()===startsAt.getTime()&&new Date(session.endsAt).getTime()===startsAt.getTime()+duration*60000):[];
       form.existingClassSessionId.innerHTML='<option value="">Создать историческое занятие</option>'+candidates.map(session=>`<option value="${e(session.id)}">${e(session.name||date(session.startsAt))}</option>`).join('');
       if(linkedSessionId&&candidates.some(session=>session.id===linkedSessionId))form.existingClassSessionId.value=linkedSessionId;
+      updateTrainer();
     };
     const update=()=>{const packages=personPackages(this.data.packages,form.personId.value).filter(membership=>membership.status==='ACTIVE'&&['GROUP_PACKAGE','PERSONAL'].includes(this.product(relationId(membership,'product'))?.category));form.membershipId.innerHTML=options(packages,membership=>membership.name+' · доступно '+membership.visitsAvailable);updateSession();};
     form.personId.value=new URLSearchParams(location.hash.split('?')[1]||'').get('client')||'';
     update();form.personId.onchange=update;
-    form.membershipId.onchange=updateSession;form.startsAt.onchange=updateSession;
+    form.membershipId.onchange=updateSession;form.startsAt.onchange=updateSession;form.existingClassSessionId.onchange=updateTrainer;
     form.oninput=()=>{document.querySelector('#studio-preview').innerHTML=empty('Данные изменены — выполните предпросмотр заново.');};
     this.restore('attendance',form,'/studio/attendance/record-past');
     form.onsubmit=async event=>{
@@ -249,7 +274,7 @@ export class StudioUi {
         const snapshot=JSON.stringify(Object.fromEntries(new FormData(form)));
         const result=await this.api.request('/studio/attendance/preview',{method:'POST',body});
         if(!form.isConnected||snapshot!==JSON.stringify(Object.fromEntries(new FormData(form))))return;
-        document.querySelector('#studio-preview').innerHTML=`<dl><dt>Клиент</dt><dd>${e(this.clientName(body.personId))}</dd><dt>Начало</dt><dd>${e(date(body.startsAt))}</dd><dt>Окончание</dt><dd>${e(date(body.endsAt))}</dd><dt>До списания</dt><dd>${e(result.visitsAvailable)}</dd><dt>После</dt><dd>${e(result.visitsAfter)}</dd></dl><p>Будет списано одно посещение.</p><button id="studio-record" class="primary">Подтвердить посещение и списание</button>`;
+        document.querySelector('#studio-preview').innerHTML=`<dl><dt>Клиент</dt><dd>${e(this.clientName(body.personId))}</dd><dt>Начало</dt><dd>${e(date(body.startsAt))}</dd><dt>Окончание</dt><dd>${e(date(body.endsAt))}</dd><dt>Тренер</dt><dd>${e(result.trainer?.name||'Не назначен')}</dd><dt>До списания</dt><dd>${e(result.visitsAvailable)}</dd><dt>После</dt><dd>${e(result.visitsAfter)}</dd></dl><p>Будет списано одно посещение.</p><button id="studio-record" class="primary">Подтвердить посещение и списание</button>`;
         document.querySelector('#studio-record').onclick=()=>this.submit('attendance',body,'/studio/attendance/record-past');
       }catch(error){if(form.isConnected)this.errorBox(error,'#studio-form-error');}
       finally{button.disabled=false;}

@@ -3,6 +3,7 @@ export const studioNav = [
   ['gelios/packages','Пакеты и оплата','wallet'], ['gelios/attendance','Внести тренировку','plus'],
   ['gelios/calendar','Календарь тренировок','calendar'],
   ['gelios/bookings','Посещения','calendar'], ['gelios/transactions','Журнал списаний','chart'],
+  ['gelios/trainers','Тренеры и зарплата','users'],
   ['gelios/analytics','Аналитика','chart'],
 ];
 
@@ -117,7 +118,7 @@ export const attendancePayload = (values, membership, product, key) => {
   if (!Number.isInteger(duration) || duration <= 0 || !Number.isFinite(startsAt.getTime())) throw new Error('Проверьте время и длительность продукта.');
   const endsAt = new Date(startsAt.getTime() + duration * 60000);
   if (endsAt >= new Date()) throw new Error('Можно внести только полностью прошедшую тренировку.');
-  return {personId:values.personId,membershipId:membership.id,startsAt:startsAt.toISOString(),endsAt:endsAt.toISOString(),reason:values.reason.trim(),source:values.source,...(values.sourceDetails?.trim()?{sourceDetails:values.sourceDetails.trim()}:{}),...(values.existingClassSessionId?{existingClassSessionId:values.existingClassSessionId}:{}),idempotencyKey:key};
+  return {...(values.trainerId?{trainerId:values.trainerId}:{}),personId:values.personId,membershipId:membership.id,startsAt:startsAt.toISOString(),endsAt:endsAt.toISOString(),reason:values.reason.trim(),source:values.source,...(values.sourceDetails?.trim()?{sourceDetails:values.sourceDetails.trim()}:{}),...(values.existingClassSessionId?{existingClassSessionId:values.existingClassSessionId}:{}),idempotencyKey:key};
 };
 
 export class PendingStudioOperation {
@@ -128,5 +129,5 @@ export class PendingStudioOperation {
   }
   save(kind, body) { this.storage.setItem('gelios-pending-' + kind, JSON.stringify(body)); }
   clear(kind) { this.storage.removeItem('gelios-pending-' + kind); }
-  clearAll() { for (const kind of ['client','payment','attendance','booking','cancellation','session']) this.clear(kind); }
+  clearAll() { for (const kind of ['client','payment','attendance','booking','cancellation','session','payroll']) this.clear(kind); }
 }

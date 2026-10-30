@@ -180,3 +180,11 @@ test('отмена разовой записи использует команд
   assert.equal(sessionCancellationPath({membershipId:'package'}),'/studio/bookings/cancel');
   assert.equal(sessionCancellationPath({membershipId:null,paymentStatus:'EXPECTED'}),'/studio/bookings/cancel-pay-as-you-go');
 });
+
+
+test('прошедшее посещение сохраняет выбранного тренера в подтверждении и повторе',()=>{
+  const membership={id:'membership',personId:'person'},product={durationMinutes:55};
+  const payload=attendancePayload({personId:'person',trainerId:'trainer',startsAt:'2026-01-01T09:00:00Z',reason:'Журнал',source:'ATTENDANCE_LOG'},membership,product,'same-key');
+  assert.equal(payload.trainerId,'trainer');
+  assert.equal(payload.idempotencyKey,'same-key');
+});

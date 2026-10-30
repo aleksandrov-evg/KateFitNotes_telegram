@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-30",
+  "origins": {
+    "ui": "http://stage.admin.katfit.lan",
+    "crm": "http://crm-stage.lan"
+  },
+  "revisions": {
+    "ui": "e7b900655f62467ed51ae71bd21f2c9b0eb9657f",
+    "api": "60e0d7c777495b751681e3871eef2cc19aa10cdc"
+  },
+  "fixturePrefix": "STAGE-QA-PAYROLL-UI-20261030-0900",
+  "trainer": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"success\":true,\"message\":\"Found 1 studioTrainer records\",\"result\":{\"records\":[{\"name\":\"STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер\",\"active\":true,\"id\":\"d9a10c89-9575-4f50-93fa-a6edb2e7395e\"}],\"count\":\"1\",\"hasNextPage\":false},\"recordReferences\":[{\"objectNameSingular\":\"studioTrainer\",\"recordId\":\"d9a10c89-9575-4f50-93fa-a6edb2e7395e\",\"displayName\":\"STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер\"}]}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "beforeMembership": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"success\":true,\"message\":\"Found 1 studioMembership records\",\"result\":{\"records\":[{\"name\":\"Группа 8 · 2026-10-26\",\"status\":\"ACTIVE\",\"expiresOn\":null,\"visitsReserved\":0,\"visitsConsumed\":2,\"visitsAvailable\":6,\"id\":\"caa7f6e9-6af2-4934-887c-e25ed51c1709\",\"productId\":\"5d840d7f-ce4a-4e0f-bf18-470ef3c6ae23\",\"personId\":\"d8e4015d-072f-445f-87a0-2cfdb74e7008\"}],\"count\":\"1\",\"hasNextPage\":false},\"recordReferences\":[{\"objectNameSingular\":\"studioMembership\",\"recordId\":\"caa7f6e9-6af2-4934-887c-e25ed51c1709\",\"displayName\":\"Группа 8 · 2026-10-26\"}]}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "initialAccrual": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"success\":true,\"message\":\"Found 1 trainerPayEntry records\",\"result\":{\"records\":[{\"name\":\"Группа на реформере · STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер · 1\",\"revision\":1,\"entryType\":\"ACCRUAL\",\"state\":\"POSTED\",\"amount\":{\"amountMicros\":710250000,\"currencyCode\":\"RUB\"},\"participantCount\":1,\"id\":\"7f6739b3-b666-4e80-8135-9e416edbfacd\",\"trainerId\":\"d9a10c89-9575-4f50-93fa-a6edb2e7395e\",\"classSessionId\":\"86fd2c64-c5c6-46d6-b130-5d1025ae632e\"}],\"count\":\"1\",\"hasNextPage\":false},\"recordReferences\":[{\"objectNameSingular\":\"trainerPayEntry\",\"recordId\":\"7f6739b3-b666-4e80-8135-9e416edbfacd\",\"displayName\":\"Группа на реформере · STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер · 1\"}]}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "membershipAfterCreation": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"success\":true,\"message\":\"Found 1 studioMembership records\",\"result\":{\"records\":[{\"name\":\"Группа 8 · 2026-10-26\",\"visitsReserved\":0,\"visitsConsumed\":3,\"visitsAvailable\":5,\"id\":\"caa7f6e9-6af2-4934-887c-e25ed51c1709\",\"personId\":\"d8e4015d-072f-445f-87a0-2cfdb74e7008\"}],\"count\":\"1\",\"hasNextPage\":false},\"recordReferences\":[{\"objectNameSingular\":\"studioMembership\",\"recordId\":\"caa7f6e9-6af2-4934-887c-e25ed51c1709\",\"displayName\":\"Группа 8 · 2026-10-26\"}]}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "finalJournal": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"success\":true,\"message\":\"Found 3 trainerPayEntry records\",\"result\":{\"records\":[{\"name\":\"Сторно · 7f6739b3-b666-4e80-8135-9e416edbfacd\",\"revision\":2,\"entryType\":\"REVERSAL\",\"state\":\"POSTED\",\"amount\":{\"amountMicros\":-710250000,\"currencyCode\":\"RUB\"},\"participantCount\":1,\"id\":\"1052cea1-b7d1-49fc-a17c-30c95ebd0f90\",\"trainerId\":\"d9a10c89-9575-4f50-93fa-a6edb2e7395e\",\"classSessionId\":\"86fd2c64-c5c6-46d6-b130-5d1025ae632e\"},{\"name\":\"Группа на реформере · STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер · 1\",\"revision\":1,\"entryType\":\"ACCRUAL\",\"state\":\"POSTED\",\"amount\":{\"amountMicros\":710250000,\"currencyCode\":\"RUB\"},\"participantCount\":1,\"id\":\"7f6739b3-b666-4e80-8135-9e416edbfacd\",\"trainerId\":\"d9a10c89-9575-4f50-93fa-a6edb2e7395e\",\"classSessionId\":\"86fd2c64-c5c6-46d6-b130-5d1025ae632e\"},{\"name\":\"Группа на реформере · STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер · 2\",\"revision\":2,\"entryType\":\"ACCRUAL\",\"state\":\"POSTED\",\"amount\":{\"amountMicros\":710250000,\"currencyCode\":\"RUB\"},\"participantCount\":1,\"id\":\"ba078952-d512-47c7-84b3-a9f3052b5819\",\"trainerId\":\"d9a10c89-9575-4f50-93fa-a6edb2e7395e\",\"classSessionId\":\"86fd2c64-c5c6-46d6-b130-5d1025ae632e\"}],\"count\":\"3\",\"hasNextPage\":false},\"recordReferences\":[{\"objectNameSingular\":\"trainerPayEntry\",\"recordId\":\"1052cea1-b7d1-49fc-a17c-30c95ebd0f90\",\"displayName\":\"Сторно · 7f6739b3-b666-4e80-8135-9e416edbfacd\"},{\"objectNameSingular\":\"trainerPayEntry\",\"recordId\":\"7f6739b3-b666-4e80-8135-9e416edbfacd\",\"displayName\":\"Группа на реформере · STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер · 1\"},{\"objectNameSingular\":\"trainerPayEntry\",\"recordId\":\"ba078952-d512-47c7-84b3-a9f3052b5819\",\"displayName\":\"Группа на реформере · STAGE-QA-PAYROLL-UI-20261030-0900 · Тренер · 2\"}]}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "finalSummary": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"success\":true,\"message\":\"Logic function executed successfully\",\"result\":{\"success\":true,\"amountMicros\":710250000,\"currencyCode\":\"RUB\",\"sessionCount\":1,\"rows\":[{\"entryId\":\"ba078952-d512-47c7-84b3-a9f3052b5819\",\"classSessionId\":\"86fd2c64-c5c6-46d6-b130-5d1025ae632e\",\"name\":\"Группа на реформере\",\"startsAt\":\"2026-10-29T15:05:00.000Z\",\"participantCount\":1,\"amountMicros\":710250000}],\"pendingSessionIds\":[]}}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "membershipAfterCorrection": {
+    "status": "fulfilled",
+    "value": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"success\":true,\"message\":\"Found 1 studioMembership records\",\"result\":{\"records\":[{\"name\":\"Группа 8 · 2026-10-26\",\"visitsReserved\":0,\"visitsConsumed\":3,\"visitsAvailable\":5,\"id\":\"caa7f6e9-6af2-4934-887c-e25ed51c1709\",\"personId\":\"d8e4015d-072f-445f-87a0-2cfdb74e7008\"}],\"count\":\"1\",\"hasNextPage\":false},\"recordReferences\":[{\"objectNameSingular\":\"studioMembership\",\"recordId\":\"caa7f6e9-6af2-4934-887c-e25ed51c1709\",\"displayName\":\"Группа 8 · 2026-10-26\"}]}"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "totals": {
+    "trainerSalaryMinor": "511025",
+    "expensesMinor": "814078",
+    "paidExpensesMinor": "0",
+    "trainerSalarySessions": 5
+  }
+}
