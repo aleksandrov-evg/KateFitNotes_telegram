@@ -138,7 +138,9 @@ export class StudioTrainers {
     submit.onclick=async()=>{
       if(this.studio.saving)return;
       const body=confirmed||build();if(!body.trainerId||body.previousEntryId&&!body.reason)return this.studio.errorBox(new Error('Выберите тренера и укажите причину исправления.'),'#dialog-error');
-      this.studio.saving=true;dialog.querySelectorAll('button').forEach(button=>button.disabled=true);
+      const controls=[...form.querySelectorAll('input,select,textarea')].map(control=>({control,disabled:control.disabled}));
+      const errorBox=dialog.querySelector('#dialog-error');if(errorBox)errorBox.hidden=true;
+      this.studio.saving=true;dialog.querySelectorAll('button').forEach(button=>button.disabled=true);controls.forEach(({control})=>control.disabled=true);
       try{
         if(!preview&&!confirmed){preview=await this.studio.api.request('/studio/compensation/close',{method:'POST',body:{...body,previewOnly:true}});paintPreview();submit.textContent='Подтвердить начисление';return;}
         confirmed=confirmed||{...body,previewOnly:false,previewToken:preview.previewToken};this.studio.pending.save('payroll',confirmed);
@@ -147,7 +149,7 @@ export class StudioTrainers {
         try{await this.changed();}catch{this.studio.notify('Начисление сохранено. Обновите данные для проверки.');}
         form.innerHTML=`<p role="status">${result.duplicate?'Начисление уже сохранено.':'Начисление сохранено.'} ${e(money((BigInt(result.amountMicros)/10000n).toString()))}</p><p>Учтено в затратах и зарплате тренера. История доступна в разделе «Тренеры» и аналитике.</p>`;
       }catch(error){if(error.status===422||error.details?.code==='COMPENSATION_PREVIEW_CHANGED'){this.studio.pending.clear('payroll');confirmed=null;preview=null;submit.textContent='Проверить расчёт';paintPreview();}this.studio.errorBox(error,'#dialog-error');}
-      finally{this.studio.saving=false;dialog.querySelectorAll('button').forEach(button=>button.disabled=false);}
+      finally{this.studio.saving=false;controls.forEach(({control,disabled})=>{if(control.isConnected)control.disabled=disabled;});dialog.querySelectorAll('button').forEach(button=>button.disabled=false);}
     };
   }
 }
